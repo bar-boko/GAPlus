@@ -195,7 +195,6 @@ def filter ( a, valsPic, matches ) -> np.ndarray:
     buffer_a = context.create_buffer( flag_read, a )
     buffer_places = context.create_buffer( flag_read, matches_array )
     buffer_valsPic = context.create_buffer( flag_read, valsPic )
-    buffer_matches = context.create_buffer( flag_read, matches_array )
 
     buffer_result = context.create_buffer( flag_write, result_idx )
     buffer_current = context.create_buffer( flag_both, current )
