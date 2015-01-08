@@ -18,7 +18,7 @@ class RuleType( Enum ):
     COMPLEX_RULE = 5
 
 
-def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches)
+def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches, count)
     matches = []
     size = len( varsDict.keys( ) )
     result = np.zeros( size, dtype = np.int32 )
@@ -40,7 +40,7 @@ def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches)
 
         count = count + 1
 
-    return result, matches
+    return result, matches, count
 
 
 def parse ( rules ) -> tuple:  # (headerBlock, body_lst)
@@ -68,7 +68,13 @@ def parse ( rules ) -> tuple:  # (headerBlock, body_lst)
     return result
 
 
-def parse_block ( block ) -> tuple:  # (atom, args, notation, blockType)
+def parse_block ( block ) -> tuple:
+    """
+    Gets a block in a GAP Rule and return a tuple of (atom, args, notation, blockType)
+    :param block:
+    :return: tuple => (atom:str, args:list, notation:str, blockType:BlockType)
+    :raise ValueError:
+    """
     predicat, notation = block.split( ":" )
     blockType = BlockType.UNKNOWN_BLOCK
     if validation.v_IsFloat( notation ):
@@ -108,13 +114,34 @@ def analyse_rule ( rule ):
 
     for block in blockLst:
         atom, args, notation, type = block
-        varPic, matches = create_varsPic_matches( args, arg_dict )
-        finalLst.append( (atom, args, notation, type, varPic, matches) )
+        varPic, matches, count = create_varsPic_matches( args, arg_dict )
+        finalLst.append( (atom, args, notation, type, varPic, matches, count) )
 
     headerRes = finalLst [len( finalLst ) - 1]
     bodyRes = finalLst [0:len( finalLst ) - 2]
 
+    bodyRes.sort( key = lambda item: item [6] )
+
     return (headerRes, bodyRes)
+
+
+def cmp_bodyBlock ( a, b ) -> int:
+    a_varPic, b_varPic = a [4], b [4]
+    a_count, b_count = 0
+
+    for item in a_varPic:
+        if item != -1:
+            a_count = a_count + 1
+
+    for item in b_varPic:
+        if item != -1:
+            b_count = a_count + 1
+
+    if a_count > b_count:
+        return -1
+    if a_count < b_count:
+        return 1
+    return 0
 
 # TESTING
 rule = parse( ["g1_member(X):a*b*c*d<-g1_member(Y):b&p(Y):c&friend(Y,X):a&p(X):d&p(Y):0.25"] )

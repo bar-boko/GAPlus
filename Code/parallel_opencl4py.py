@@ -22,9 +22,23 @@ flag_write = cl.CL_MEM_COPY_HOST_PTR | cl.CL_MEM_WRITE_ONLY
 flag_both = cl.CL_MEM_COPY_HOST_PTR | cl.CL_MEM_READ_WRITE
 
 def set_arg(kernel, idx, value, dtype):
+    """
+    Setting a simple value as an argument in a given kernel.
+    :param kernel: The kernel to add the value to.
+    :param idx:  The position (starting from 0) of the argument.
+    :param value: The value that you want to add to the kernel as argument.
+    :param dtype: The dtype of the value (np.dtype)
+    """
     kernel.set_arg(idx, np.array([value], dtype=dtype))
 
 def cartesian(a, b) -> np.ndarray:
+    """
+    Gets 2 NDArrays and return the multiple of it.
+    :rtype : np.ndarray
+    :param a: The 1st NDArray that we want to multiple.
+    :param b: The 2nd NDArray that we want to multiple.
+    :return: An NDArray that is a cartesian relation.
+    """
     a_row, a_col = np.shape(a)
     b_row, b_col = np.shape(b)
 
@@ -51,7 +65,6 @@ def cartesian(a, b) -> np.ndarray:
     queue.read_buffer(buffer_result, result)
 
     return result
-
 
 def p_make_join_valsPic ( a, b ) -> np.ndarray:
     a_row, b_row = np.shape( a ), np.shape( b )
