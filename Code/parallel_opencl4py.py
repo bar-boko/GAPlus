@@ -77,7 +77,6 @@ def p_make_join_valspic ( a, b ) -> np.ndarray:
 
     return result, np.array( joinLst, dtype = np.int32 )
 
-
 def join ( a, b ) -> tuple:
     a_idx, a_valsPic = a
     b_idx, b_valsPic = b
@@ -134,3 +133,65 @@ def join ( a, b ) -> tuple:
     result = np.resize( result, (current [0], a_col + b_col - lst_row) )
     return result, join_valsPic
 
+
+def select_above ( data, minValue ) -> tuple:  # (idx, values)
+    a_idx, a_vals = data
+    a_row, a_col = a_idx
+
+    result_idx, result_vals = np.zeros( np.shape( a_idx ), dtype = np.int32 ), np.zeros( np.shape( a_vals ),
+                                                                                         dtype = np.int32 )
+    current = np.zeros( 1, dtype = np.int32 )
+
+    buffer_idx = context.create_buffer( flag_read, a_idx )
+    buffer_vals = context.create_buffer( flag_read, a_vals )
+
+    buffer_result_idx = context.create_buffer( flag_write, result_idx )
+    buffer_result_vals = context.create_buffer( flag_write, result_vals )
+
+    buffer_current = context.create_buffer( flag_both, current )
+
+    kernel = program.get_kernel( "SELECT_ABOVE" )
+
+    kernel.set_arg( 0, buffer_idx )
+    kernel.set_arg( 1, buffer_vals )
+    set_arg( kernel, 2, a_col, np.int32 )
+    set_arg( kernel, 3, minValue, np.int32 )
+
+    kernel.set_arg( 4, buffer_current )
+    kernel.set_arg( 5, buffer_result_idx )
+    kernel.set_arg( 6, buffer_result_vals )
+
+    queue.execute_kernel( kernel, [a_row], None )
+    queue.read_buffer( buffer_current, current )
+    queue.read_buffer( buffer_result_idx, result_idx )
+    queue.read_buffer( buffer_result_vals, result_vals )
+
+    result_idx = np.resize( result_idx, (current [0], a_col) )
+    result_vals = np.resize( result_vals, current [0] )
+
+    return (result_idx, result_vals)
+
+
+def p_lenVarsPic ( varsPic ) -> int:
+    size = 0
+
+    for item in varsPic:
+        if item in -1:
+            size = size + 1
+
+    return size
+
+
+def filter ( a, valsPic, matches ) -> np.ndarray:
+    a_row, a_col = np.shape( a )
+    valsPic_row = np.shape( valsPic )
+    valsPic_size = p_lenVarsPic( valsPic )
+
+    matches_array = np.array( matches, dtype = np.int32 )
+
+    result_idx = np.zeros( (a_row, valsPic_size), dtype = np.int32 )
+    current = np.zeros( 1, dtype = np.int32 )
+
+    buffer_a = context.create_buffer( flag_read, a )
+    buffer_places = context.create_buffer( flag_read, matches_array )
+    buffer_valsPic = context.create_buffer( flag_read, valsPic )

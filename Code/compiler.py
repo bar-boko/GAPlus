@@ -1,14 +1,14 @@
 __author__ = "Bar Bokovza"
 
 from enum import Enum
-from code import validation
+import validation
 import numpy as np
+import copy
 
 class BlockType( Enum ):
     UNKNOWN_BLOCK = 0
     ANNOTATION_BLOCK = 1
     ABOVE_BLOCK = 2
-
 
 class RuleType( Enum ):
     ONCE_HEADER_RULE = 1
@@ -18,11 +18,12 @@ class RuleType( Enum ):
     COMPLEX_RULE = 5
 
 
-def create_varsPic_matches ( args, varsDict ) -> tuple:
+def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches)
     matches = []
     size = len( varsDict.keys( ) )
     result = np.zeros( size, dtype = np.int32 )
-    for i in range( 0, size - 1 ):
+
+    for i in range( 0, size ):
         result [i] = -1
 
     count = 0
@@ -35,16 +36,15 @@ def create_varsPic_matches ( args, varsDict ) -> tuple:
         if result [idx] == -1:
             result [idx] = count
         else:
-            matches.append( result [idx], count )
+            matches.append( (result [idx], count) )
 
         count = count + 1
 
     return result, matches
 
 
-def parse ( rules ) -> tuple:
-    final_results = []
-
+def parse ( rules ) -> tuple:  # (headerBlock, body_lst)
+    result = []
     for rule in rules:
         rule = rule.replace( " ", "" )
         rule = rule.replace( "(", "," )
@@ -63,10 +63,12 @@ def parse ( rules ) -> tuple:
             parsedBlock = parse_block( block )
             body_lst.append( parsedBlock )
 
-        final_results.append( (headerBlock, body_lst) )
+        result.append( (headerBlock, body_lst) )
+
+    return result
 
 
-def parse_block ( block ) -> tuple:
+def parse_block ( block ) -> tuple:  # (atom, args, notation, blockType)
     predicat, notation = block.split( ":" )
     blockType = BlockType.UNKNOWN_BLOCK
     if validation.v_IsFloat( notation ):
@@ -74,7 +76,7 @@ def parse_block ( block ) -> tuple:
     else:
         blockType = BlockType.ANNOTATION_BLOCK
 
-    atoms = [predicat.split( "," )]
+    atoms = predicat.split( "," )
     if len( atoms ) < 2:
         raise ValueError( "The predicat '" + predicat + "' does not have an atom and arguments" )
 
@@ -82,8 +84,38 @@ def parse_block ( block ) -> tuple:
 
     return atom, args, notation, blockType
 
-# def analyse_rule (rule):
 
+def analyse_rule ( rule ):
+    arg_dict = {}
+    predicats = []
+    count = 0
+
+    headerBlock, bodyBlocks = rule
+
+    blockLst = copy.deepcopy( bodyBlocks )
+    blockLst.append( headerBlock )
+
+    finalLst = []
+
+    for block in blockLst:
+        atom, args, notation, type = block
+        if not atom in predicats:
+            predicats.append( atom )
+        for arg in args:
+            if not arg in arg_dict:
+                arg_dict [arg] = count
+                count = count + 1
+
+    for block in blockLst:
+        atom, args, notation, type = block
+        varPic, matches = create_varsPic_matches( args, arg_dict )
+        finalLst.append( (atom, args, notation, type, varPic, matches) )
+
+    headerRes = finalLst [len( finalLst ) - 1]
+    bodyRes = finalLst [0:len( finalLst ) - 2]
+
+    return (headerRes, bodyRes)
 
 # TESTING
-parse( ["g1(x):a<-g2(x):a", "friend(x,y):a*b<-p(x):a&q(y):b"] )
+rule = parse( ["g1_member(X):a*b*c*d<-g1_member(Y):b&p(Y):c&friend(Y,X):a&p(X):d&p(Y):0.25"] )
+result = analyse_rule( rule [0] )
