@@ -53,7 +53,7 @@ def cartesian(a, b) -> np.ndarray:
     return result
 
 
-def p_make_join_valspic ( a, b ) -> np.ndarray:
+def p_make_join_valsPic ( a, b ) -> np.ndarray:
     a_row, b_row = np.shape( a ), np.shape( b )
 
     if a_row != b_row:
@@ -84,7 +84,7 @@ def join ( a, b ) -> tuple:
     a_row, a_col = np.shape( a )
     b_row, b_col = np.shape( b )
 
-    join_valsPic, joinLst = p_make_join_valspic( a_valsPic, b_valsPic )
+    join_valsPic, joinLst = p_make_join_valsPic( a_valsPic, b_valsPic )
     lst_row = np.shape( joinLst )
 
     if lst_row == 0:
@@ -133,7 +133,6 @@ def join ( a, b ) -> tuple:
     result = np.resize( result, (current [0], a_col + b_col - lst_row) )
     return result, join_valsPic
 
-
 def select_above ( data, minValue ) -> tuple:  # (idx, values)
     a_idx, a_vals = data
     a_row, a_col = a_idx
@@ -171,7 +170,6 @@ def select_above ( data, minValue ) -> tuple:  # (idx, values)
 
     return (result_idx, result_vals)
 
-
 def p_lenVarsPic ( varsPic ) -> int:
     size = 0
 
@@ -180,7 +178,6 @@ def p_lenVarsPic ( varsPic ) -> int:
             size = size + 1
 
     return size
-
 
 def filter ( a, valsPic, matches ) -> np.ndarray:
     a_row, a_col = np.shape( a )
@@ -219,3 +216,21 @@ def filter ( a, valsPic, matches ) -> np.ndarray:
 
     result_idx = np.resize( result_idx, (current [0], a_col) )
     return result_idx, valsPic
+
+
+def set_lower_boundary ( data, minValue ) -> tuple:
+    a_idx, a_values = data
+
+    a_row, = np.shape( a_values )
+
+    buffer_values = context.create_buffer( flag_both, a_values )
+
+    kernel = program.get_kernel( "SET_LOWER_BOUNDARY" )
+
+    kernel.set_arg( 0, buffer_values )
+    set_arg( kernel, 1, minValue, np.int32 )
+
+    queue.execute_kernel( kernel, (a_row), None )
+    queue.read_buffer( buffer_values, a_values )
+
+    return (a_idx, a_values)
