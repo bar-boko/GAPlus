@@ -195,3 +195,28 @@ def filter ( a, valsPic, matches ) -> np.ndarray:
     buffer_a = context.create_buffer( flag_read, a )
     buffer_places = context.create_buffer( flag_read, matches_array )
     buffer_valsPic = context.create_buffer( flag_read, valsPic )
+    buffer_matches = context.create_buffer( flag_read, matches_array )
+
+    buffer_result = context.create_buffer( flag_write, result_idx )
+    buffer_current = context.create_buffer( flag_both, current )
+
+    kernel = program.get_kernel( "FILTER2" )
+
+    kernel.set_arg( 0, buffer_a )
+    set_arg( kernel, 1, a_row, np.int32 )
+
+    kernel.set_arg( 2, buffer_places )
+    set_arg( kernel, 3, len( matches ), np.int32 )
+    kernel.set_arg( 4, buffer_valsPic )
+    set_arg( kernel, 5, valsPic_row, np.int32 )
+
+    kernel.set_arg( 6, buffer_current )
+    kernel.set_arg( 7, buffer_result )
+    set_arg( kernel, 8, valsPic_size )
+
+    queue.execute_kernel( kernel, [a_row], None )
+    queue.read_buffer( buffer_current, current )
+    queue.read_buffer( buffer_result, result_idx )
+
+    result_idx = np.resize( result_idx, (current [0], a_col) )
+    return result_idx, valsPic

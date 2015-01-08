@@ -130,6 +130,24 @@ void FILTER(__global int* a_idx, const int a_idx_col, __global int* places, cons
             result_idx[curr*a_idx_col+i] = a_idx[x*a_idx_col+i];
 }
 
+__kernel
+void FILTER2 (__global int* a, const int a_col, __global int* places, const int places_row,
+              __global int* valsPic, const int valsPic_row, __global int* current, __global int* result, int result_col){
+
+              int x = get_global_id(0);
+
+              int i;
+
+              for(i=0; i < places_row; i++)
+                if(a[x*a_col+places[2*i]] != a[x*a_col+places[2*i+1]]) return;
+
+              int curr = atomic_add(current, 1);
+
+              for(i=0; i < valsPic_row; i++)
+                if(valsPic[i] != -1)
+                    result[curr*result_col+valsPic[i]] = a[x*a_col+valsPic[i]];
+}
+
 /// This function return all the rows from the table that have value >= minVal
 __kernel
 void SELECT_ABOVE(__global const int* args, __global const int* values, int a_col, int minVal,
