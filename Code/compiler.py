@@ -1,9 +1,12 @@
 __author__ = "Bar Bokovza"
 
 from enum import Enum
-import validation
-import numpy as np
 import copy
+
+import numpy as np
+
+import validation
+
 
 class BlockType( Enum ):
     UNKNOWN_BLOCK = 0
@@ -16,7 +19,6 @@ class RuleType( Enum ):
     HEADER_RULE = 3
     BASIC_RULE = 4
     COMPLEX_RULE = 5
-
 
 def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches, count)
     matches = []
@@ -43,7 +45,7 @@ def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches, cou
     return result, matches, count
 
 
-def parse ( rules ) -> tuple:  # (headerBlock, body_lst)
+def parse ( rules ) -> list:  # (headerBlock, body_lst)
     result = []
     for rule in rules:
         rule = rule.replace( " ", "" )
@@ -68,7 +70,7 @@ def parse ( rules ) -> tuple:  # (headerBlock, body_lst)
     return result
 
 
-def parse_block ( block ) -> tuple:
+def parse_block ( block ) -> (str, list, str, BlockType):
     """
     Gets a block in a GAP Rule and return a tuple of (atom, args, notation, blockType)
     :param block:
@@ -89,7 +91,6 @@ def parse_block ( block ) -> tuple:
     atom, args = atoms [0], atoms [1:]
 
     return atom, args, notation, blockType
-
 
 def analyse_rule ( rule ):
     arg_dict = {}
@@ -126,7 +127,7 @@ def analyse_rule ( rule ):
 
 def cmp_bodyBlock ( a, b ) -> int:
     a_varPic, b_varPic = a [4], b [4]
-    a_count, b_count = 0
+    a_count, b_count = 0, 0
 
     for item in a_varPic:
         if item != -1:
@@ -142,6 +143,23 @@ def cmp_bodyBlock ( a, b ) -> int:
         return 1
     return 0
 
-# TESTING
-rule = parse( ["g1_member(X):a*b*c*d<-g1_member(Y):b&p(Y):c&friend(Y,X):a&p(X):d&p(Y):0.25"] )
-result = analyse_rule( rule [0] )
+
+class GAP_Compiler:
+    rules = []
+
+    def __int__ ( self ):
+        rules = []
+
+    def load ( self, path ):
+        lines = []
+        filer = open( path, "r" )
+
+        for line in filer.readline( ):
+            lines.append( line )
+
+        result = parse( lines )
+
+        for item in result:
+            self.rules.append( item )
+
+

@@ -34,17 +34,17 @@ class GAP_Data:
     def reset ( self ):
         self.data = {}
 
-    def get_data ( self, name ):
+    def get_data ( self, name ) -> dict:
         if not name in self.data.keys( ):
             return None
         return self.data [name]
 
-    def to_NDArray ( self, name ):
+    def to_NDArray ( self, name ) -> (np.ndarray, np.ndarray):
         dict = self.get_data( name )
-        if dict == None:
+        if dict is None:
             return get_empty_array( np.int32 ), get_empty_array( np.float )
 
-        return np.array( dict.keys( ), dtype = np.int ), np.array( dict.values( ), dtype = np.float )
+        return np.array( list( dict.keys( ) ), dtype = np.int32 ), np.array( list( dict.values( ) ), dtype = np.float )
 
 
 
