@@ -124,7 +124,6 @@ def analyse_rule ( rule ):
 
     return (headerRes, bodyRes)
 
-
 def cmp_bodyBlock ( a, b ) -> int:
     a_varPic, b_varPic = a [4], b [4]
     a_count, b_count = 0
