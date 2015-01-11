@@ -4,10 +4,8 @@ __author__ = "Bar Bokovza"
 
 import numpy as np
 
-
 def get_empty_array ( dtype ) -> np.ndarray:
     return np.zeros( 0, dtype = dtype )
-
 
 class GAP_Data:
     data = {}
