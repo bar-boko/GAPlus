@@ -2,10 +2,11 @@ __author__ = "Bar Bokovza"
 
 from enum import Enum
 import copy
+from functools import cmp_to_key
 
 import numpy as np
 
-import validation
+import Code.validation as valid
 
 
 class BlockType( Enum ):
@@ -14,13 +15,15 @@ class BlockType( Enum ):
     ABOVE_BLOCK = 2
 
 class RuleType( Enum ):
+    UNKNOWN = 0
     ONCE_HEADER_RULE = 1
-    ONCE_GROUND_RULE = 2
+    GROUND_RULE = 2
     HEADER_RULE = 3
     BASIC_RULE = 4
     COMPLEX_RULE = 5
 
-def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches, count)
+
+def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches)
     matches = []
     size = len( varsDict.keys( ) )
     result = np.zeros( size, dtype = np.int32 )
@@ -42,7 +45,7 @@ def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches, cou
 
         count = count + 1
 
-    return result, matches, count
+    return result, matches
 
 
 def parse ( rules ) -> list:  # (headerBlock, body_lst)
@@ -79,7 +82,7 @@ def parse_block ( block ) -> (str, list, str, BlockType):
     """
     predicat, notation = block.split( ":" )
     blockType = BlockType.UNKNOWN_BLOCK
-    if validation.v_IsFloat( notation ):
+    if valid.v_IsFloat( notation ):
         blockType = BlockType.ABOVE_BLOCK
     else:
         blockType = BlockType.ANNOTATION_BLOCK
@@ -91,6 +94,26 @@ def parse_block ( block ) -> (str, list, str, BlockType):
     atom, args = atoms [0], atoms [1:]
 
     return atom, args, notation, blockType
+
+
+def cmp_analyse_rule ( a, b ) -> int:
+    a_atom, a_arguments, a_notation, a_type, a_valsPic, a_matches = a
+    b_atom, b_arguments, b_notation, b_type, b_valsPic, b_matches = b
+
+    if a_type != b_type:
+        return a_type.value - b_type.value
+
+    if len( a_arguments ) < len( b_arguments ):
+        return -1
+    if len( b_arguments ) < len( a_arguments ):
+        return 1
+
+    if len( a_matches ) < len( b_matches ):
+        return -1
+    if len( b_matches ) < len( a_matches ):
+        return 1
+
+    return 0
 
 def analyse_rule ( rule ):
     arg_dict = {}
@@ -115,13 +138,13 @@ def analyse_rule ( rule ):
 
     for block in blockLst:
         atom, args, notation, type = block
-        varPic, matches, count = create_varsPic_matches( args, arg_dict )
-        finalLst.append( (atom, args, notation, type, varPic, matches, count) )
+        varPic, matches, = create_varsPic_matches( args, arg_dict )
+        finalLst.append( (atom, args, notation, type, varPic, matches) )
 
     headerRes = finalLst [len( finalLst ) - 1]
-    bodyRes = finalLst [0:len( finalLst ) - 2]
+    bodyRes = finalLst [0:len( finalLst ) - 1]
 
-    bodyRes.sort( key = lambda item: item [6] )
+    bodyRes = sorted( bodyRes, key = cmp_to_key( cmp_analyse_rule ) )
 
     return (headerRes, bodyRes)
 
@@ -144,6 +167,32 @@ def cmp_bodyBlock ( a, b ) -> int:
     return 0
 
 
+class GAP_Rule:
+    part_header = ()
+    part_body = {}
+    rule_type = RuleType.UNKNOWN
+
+    def __init__ ( self, header, body ):
+        part_header = header
+        self.rule_type = RuleType.HEADER_RULE
+
+        if len( body ) > 0:
+            self.rule_type = RuleType.GROUND_RULE
+
+            for block in body:
+                predicat, args, notation, type = block
+                if not type in self.part_body.keys( ):
+                    self.part_body [type] = []
+
+                self.part_body [type].append( block )
+
+                if type is BlockType.ABOVE_BLOCK:
+                    self.rule_type = RuleType.BASIC_RULE
+
+
+
+
+
 class GAP_Compiler:
     rules = []
 
@@ -154,12 +203,13 @@ class GAP_Compiler:
         lines = []
         filer = open( path, "r" )
 
-        for line in filer.readline( ):
+        for line in filer.readlines( ):
             lines.append( line )
 
         result = parse( lines )
 
-        for item in result:
-            self.rules.append( item )
+        for rule in result:
+            self.rules.append( analyse_rule( rule ) )
+
 
 
