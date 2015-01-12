@@ -123,9 +123,9 @@ def QueryTree_Create_Dictionaries ( lst ) -> list:
     return result
 
 
-def QueryTree_Create_RuleArgs ( rule, num:int ) -> list:
+def QueryTree_Create_RuleArgs ( block, num:int ) -> list:
     result = []
-    predicat, physic = rule.Predicat, rule.PhysicalVarsPic
+    predicat, physic = block.Predicat, block.PhysicalVarsPic
 
     result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", 0) )
     result.append( ("start_block_" + str( num ) + " = (" + predicat + ", start_block_valsPic_" + str( num ) + ")", 0) )
@@ -137,8 +137,10 @@ def QueryTree_Create_Filter ( rule, num:int ) -> list:
     predicat, physic, matches = rule.Predicat, rule.PhysicalVarsPic, rule.Matches
 
     result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", 0) )
-    result.append( ("start_block_" + str( num ) + " = cl.filter((" + predicat + ", start_block_valsPic_" + str(
-        num ) + ")),np.array(" + str( matches ) + ", dtype=np.int32))", 0) )
+    result.append( ("start_block_" + str( num ) + " = cl.filter((" + predicat + ", start_block_valsPic_" + \
+                    str( num ) + "),np.array(" + str( matches ) + ", dtype=np.int32))", 0) )
+
+    return result
 
 
 def QueryTree_Create_Join ( lst:list ) -> list:
@@ -222,7 +224,7 @@ class GAP_Block:
     def __repr__ ( self ):
         return self.__str__( )
 
-    def p_cmp ( self, other:GAP_Block ):
+    def p_cmp ( self, other ):
         if self.Type.value is not other.Type.value:
             return self.Type.value - other.Type.value
 
@@ -297,6 +299,7 @@ class GAP_Compiler:
 #endregion
 
 compiler = GAP_Compiler( )
-compiler.Load( "../External/Rules/Pi4i.gap" )
+compiler.Load( "../External/Rules/Pi4m.gap" )
 
-rule0, rule1, rule2, rule3 = compiler.Rules [0], compiler.Rules [1], compiler.Rules [2], compiler.Rules [3]
+rule = compiler.Rules [0]
+result0 = QueryTree_Create_Filter( rule.Body [3], 3 )
