@@ -178,9 +178,7 @@ __kernel
 void PROJECTION(__global const int* array, const int array_col, __global int* result, const int result_col,
                 __global const int* places) {
                 
-                int x = get_global_id(0);
-                
-                for(int i=0; i < result_col; i++)
-                    result[x*result_col+i] = array[x*array_col+places[i]];
+                int x = get_global_id(0), y = get_global_id(1)
+                result[x*result_col+y] = array[x*array_col + places[y]];
 }
 

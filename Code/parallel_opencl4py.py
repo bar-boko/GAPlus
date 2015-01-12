@@ -231,6 +231,46 @@ def filter ( a, valsPic, matches ) -> np.ndarray:
     return result_idx, valsPic
 
 
+def projection ( data, projectionLst ) -> np.ndarray:
+    data_row, data_col = np.shape( data )
+
+    places = np.array( projectionLst, dtype = np.int32 )
+    result = np.zeros( (data_row, len( projectionLst )), dtype = np.int32 )
+
+    buffer_data = context.create_buffer( flag_read, data )
+    buffer_result = context.create_buffer( flag_write, result )
+    buffer_places = context.create_buffer( flag_read, places )
+
+    kernel = program.get_kernel( "PROJECTION" )
+
+    kernel.set_arg( 0, buffer_data )
+    set_arg( kernel, 1, data_col, dtype = np.int32 )
+    kernel.set_arg( 2, buffer_result )
+    set_arg( kernel, 3, len( projectionLst ), dtype = np.int32 )
+    kernel.set_arg( 4, buffer_places )
+
+    queue.execute_kernel( kernel, [a_row, len( projectionLst )], None )
+    queue.read_buffer( buffer_result, result_idx )
+
+    return result
+
+
+def distinct ( array, dict ) -> (np.ndarray, np.ndarray):
+    dist = {}
+
+    for item in array:
+        tup = tuple( item )
+        if not item in dist.keys( ):
+            dist [tup] = dict [tup]
+
+    if len( dist ) == 0:
+        return None, None
+
+    idx = np.array( dist.keys( ), dtype = np.int )
+    values = np.array( dist.values( ), dtype = np.int )
+
+    return idx, values
+
 def set_lower_boundary ( data, minValue ) -> tuple:
     a_idx, a_values = data
 
@@ -246,4 +286,26 @@ def set_lower_boundary ( data, minValue ) -> tuple:
     queue.execute_kernel( kernel, (a_row), None )
     queue.read_buffer( buffer_values, a_values )
 
-    return (a_idx, a_values)
+    return a_idx, a_values
+
+
+def full_select_above ( a, valsPic, data, minValue, toJoin = True ) -> (np.ndarray, np.ndarray):
+    a_array, a_valsPic = a
+
+    valsPic, joinLst = p_make_join_valsPic( a_valsPic, valsPic )
+    projection_array = projection( a_array, joinLst )
+    distinct_array = distinct( projection_array, data )
+    select_idx, select_vals = select_above( distinct_array, minValue )
+
+    if toJoin:
+        return join( a, (select_idx, valsPic) )
+    return select_idx, valsPic
+
+
+
+
+
+
+
+
+
