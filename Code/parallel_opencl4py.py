@@ -192,19 +192,21 @@ def p_lenVarsPic ( varsPic ) -> int:
 
     return size
 
-def filter ( a, valsPic, matches ) -> np.ndarray:
-    a_row, a_col = np.shape( a )
-    valsPic_row = np.shape( valsPic )
-    valsPic_size = p_lenVarsPic( valsPic )
+
+def filter ( a, matches ) -> np.ndarray:
+    a_idx, a_valsPic = a
+    a_row, a_col = np.shape( a_idx )
+    valsPic_row = np.shape( a_valsPic )
+    valsPic_size = p_lenVarsPic( a_valsPic )
 
     matches_array = np.array( matches, dtype = np.int32 )
 
     result_idx = np.zeros( (a_row, valsPic_size), dtype = np.int32 )
     current = np.zeros( 1, dtype = np.int32 )
 
-    buffer_a = context.create_buffer( flag_read, a )
+    buffer_a = context.create_buffer( flag_read, a_idx )
     buffer_places = context.create_buffer( flag_read, matches_array )
-    buffer_valsPic = context.create_buffer( flag_read, valsPic )
+    buffer_valsPic = context.create_buffer( flag_read, a_valsPic )
 
     buffer_result = context.create_buffer( flag_write, result_idx )
     buffer_current = context.create_buffer( flag_both, current )
@@ -228,8 +230,7 @@ def filter ( a, valsPic, matches ) -> np.ndarray:
     queue.read_buffer( buffer_result, result_idx )
 
     result_idx = np.resize( result_idx, (current [0], a_col) )
-    return result_idx, valsPic
-
+    return result_idx, a_valsPic
 
 def projection ( data, projectionLst ) -> np.ndarray:
     data_row, data_col = np.shape( data )
@@ -253,7 +254,6 @@ def projection ( data, projectionLst ) -> np.ndarray:
     queue.read_buffer( buffer_result, result_idx )
 
     return result
-
 
 def distinct ( array, dict ) -> (np.ndarray, np.ndarray):
     dist = {}
@@ -289,16 +289,40 @@ def set_lower_boundary ( data, minValue ) -> tuple:
     return a_idx, a_values
 
 
-def full_select_above ( a, valsPic, data, minValue, toJoin = True ) -> (np.ndarray, np.ndarray):
-    a_array, a_valsPic = a
+def p_get_virtual_valsPic ( valuePic, places ) -> np.ndarray:
+    result = []
 
-    valsPic, joinLst = p_make_join_valsPic( a_valsPic, valsPic )
-    projection_array = projection( a_array, joinLst )
+    for place in places:
+        result.append( valuePic [place] )
+
+    return result
+
+
+def p_make_valsPic ( lst, size ) -> np.ndarray:
+    result = np.zeros( size, dtype = np.int32 )
+    result.fill( -1 )
+
+    count = 0
+
+    for ptr in lst:
+        if result [ptr] != -1:
+            result [ptr] = count
+            count = count + 1
+
+    return result
+
+
+def full_select_above ( a, virtual_places, data, minValue, toJoin = True ) -> (np.ndarray, np.ndarray):
+    a_array, a_valsPic = a
+    physical_places, places_valsPic = p_get_virtual_valsPic( a_valsPic, virtual_places ), p_make_valsPic(
+        virtual_places, np.shape( a_valsPic ) )
+
+    projection_array = projection( a_array, physical_places )
     distinct_array = distinct( projection_array, data )
     select_idx, select_vals = select_above( distinct_array, minValue )
 
     if toJoin:
-        return join( a, (select_idx, valsPic) )
+        return join( a, (select_idx, places_valsPic) )
     return select_idx, valsPic
 
 

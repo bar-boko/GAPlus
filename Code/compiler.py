@@ -82,7 +82,7 @@ def parse_block ( block ) -> (str, list, str, BlockType):
     """
     predicat, notation = block.split( ":" )
     blockType = BlockType.UNKNOWN_BLOCK
-    if valid.v_IsFloat( notation ):
+    if valid.IsFloat( notation ):
         blockType = BlockType.ABOVE_BLOCK
     else:
         blockType = BlockType.ANNOTATION_BLOCK
@@ -188,10 +188,6 @@ class GAP_Rule:
 
                 if type is BlockType.ABOVE_BLOCK:
                     self.rule_type = RuleType.BASIC_RULE
-
-
-
-
 
 class GAP_Compiler:
     rules = []

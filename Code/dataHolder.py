@@ -2,7 +2,9 @@ import csv
 
 __author__ = "Bar Bokovza"
 
+# region IMPORTS
 import numpy as np
+# endregion
 
 def get_empty_array ( dtype ) -> np.ndarray:
     return np.zeros( 0, dtype = dtype )
@@ -42,9 +44,9 @@ class GAP_Data:
     def to_NDArray ( self, name ) -> (np.ndarray, np.ndarray):
         dict = self.get_data( name )
         if dict is None:
-            return get_empty_array( np.int32 ), get_empty_array( np.float )
+            return get_empty_array( np.int32 )
 
-        return np.array( list( dict.keys( ) ), dtype = np.int32 ), np.array( list( dict.values( ) ), dtype = np.float )
+        return np.array( list( dict.keys( ) ), dtype = np.int32 )
 
 
 

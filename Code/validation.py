@@ -1,7 +1,7 @@
 __author__ = "Bar Bokovza"
 
 
-def v_IsFloat ( number ) -> bool:
+def IsFloat ( number ) -> bool:
     try:
         float( number )
     except:
