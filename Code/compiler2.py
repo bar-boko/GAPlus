@@ -139,31 +139,37 @@ def QueryTree_Create_Filter ( rule, num:int ) -> list:
     result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", 0) )
     result.append( ("start_block_" + str( num ) + " = cl.filter((" + predicat + ", start_block_valsPic_" + \
                     str( num ) + "),np.array(" + str( matches ) + ", dtype=np.int32))", 0) )
+    result.append( ("_size = np.shape(start_block_" + str( num ) + ")[0]", 0) )
+    result.append( ("if _size == 0:", 0) )
+    result.append( ("return np.zeros((0, 0), dtype=np.int32)", 1) )
 
     return result
 
 
-def QueryTree_Create_Join ( lst:list ) -> list:
+def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str = "join" ) -> list:
     joinLst = []
     result = []
     interval = 0
     count = 0
 
     if len( lst ) is 1:
-        result.append( ("join_0_0 = start_block_0", 0) )
-        return result
+        result.append( (out_name + "_0_0 = " + in_name + "_0", 0) )
+        return result, [(0, 0)]
 
     while len( lst ) > 0:
         a = lst.pop( 0 )
         if len( lst ) > 0:
             b = lst.pop( 0 )
-            command = "join_" + str( interval ) + "_" + str( count ) + "=cl.join(start_block_" + str( a )
-            command = command + ",start_block_" + str( b ) + ")"
+            command = out_name + "_" + str( interval ) + "_" + str( count ) + "=cl.join(" + in_name + "_" + str( a )
+            command = command + "," + in_name + "_" + str( b ) + ")"
             result.append( (command, 0) )
+            result.append( ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", 0) )
+            result.append( ("if _size is 0:", 0) )
+            result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), 1) )
             joinLst.append( (interval, count) )
             count = count + 1
         else:
-            result.append( ("join_" + str( interval ) + "_" + str( count ) + "=start_block_" + str( a )) )
+            result.append( (out_name + "_" + str( interval ) + "_" + str( count ) + "=" + in_name + "_" + str( a )) )
             joinLst.append( (interval, count) )
 
     while len( joinLst ) is not 1:
@@ -175,22 +181,57 @@ def QueryTree_Create_Join ( lst:list ) -> list:
             a = joinLst.pop( 0 )
             if len( lst ) > 0:
                 b = lst.pop( 0 )
-                command = "join_" + str( interval ) + "_" + str( count ) + "=cl.join(join_" + str( a [0] ) + "_" + str(
+                command = out_name + "_" + str( interval ) + "_" + str( count ) + "=cl.join(" + out_name + "_" + str(
+                    a [0] ) + "_" + str(
                     a [1] )
-                command = command + ",join_" + str( b [0] ) + "_" + str( b [1] ) + ")"
+                command = command + "," + out_name + "_" + str( b [0] ) + "_" + str( b [1] ) + ")"
                 result.append( (command, 0) )
+
+                result.append(
+                    ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", 0) )
+                result.append( ("if _size is 0:", 0) )
+                result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), 1) )
+
                 temp.append( (interval, count) )
                 count = count + 1
         else:
             result.append(
-                ("join_" + str( interval ) + "_" + str( count ) + "=join_" + str( a [0] ) + "_" + str( a [1] ), 0) )
+                (
+                    out_name + "_" + str( interval ) + "_" + str( count ) + "=" + out_name + "_" + str(
+                        a [0] ) + "_" + str(
+                        a [1] ), 0) )
             temp.append( (interval, count) )
 
         joinLst = temp
 
+    result.append(
+        "final_" + out_name + " = " + out_name + "_" + str( joinLst [0] [0] ) + "_" + str( joinLst [0] [1] ) )
+
     return result, joinLst [0]
 
 
+def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str, in_name:str = "join" ) -> list:
+    result = []
+    count = 0
+
+    for ptr in lst:
+        command = "select_" + str( count ) + " = cl.full_select_above(final_" + in_name + ", " + str(
+            rule.Body [ptr].VirtualVarsPic )
+        command = command + ", MainDict[\"" + dictName + "\"], " + str( float( rule.Body [ptr].Notation ) ) + ")"
+
+        result.append( (command, 0) )
+        result.append( ("_size = np.shape(select_" + str( count ) + ")") )
+        result.append( ("if _size[0] is 0:", 0) )
+        result.append( ("return select_" + str( count ), 1) )
+
+    tmp = QueryTree_Create_Join( lst, "select", "select_join" )
+    joinLst, target = tmp
+    result = result + joinLst
+
+    command = "def_zone = cl.join(final_select_join, final_join)"
+    result.append( (command, 0) )
+
+    return result
 #endregion
 
 #region GAP Block
@@ -302,4 +343,18 @@ compiler = GAP_Compiler( )
 compiler.Load( "../External/Rules/Pi4m.gap" )
 
 rule = compiler.Rules [0]
+result = QueryTree_Create_RuleArgs( rule.Body [0], 0 )
+result = result + QueryTree_Create_RuleArgs( rule.Body [1], 1 )
+result = result + QueryTree_Create_RuleArgs( rule.Body [2], 2 )
+result = result + QueryTree_Create_Filter( rule.Body [3], 3 )
+result = result + QueryTree_Create_RuleArgs( rule.Body [4], 4 )
+
+lst = list( range( 0, 4 ) )
+
+join_result = QueryTree_Create_Join( lst )
+
+select_result = QueryTree_Create_SelectAbove( [4], rule, "MainDict" )
+
+result = result + join_result [0] + select_result
+
 result0 = QueryTree_Create_Filter( rule.Body [3], 3 )

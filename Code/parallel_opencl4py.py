@@ -312,7 +312,8 @@ def p_make_valsPic ( lst, size ) -> np.ndarray:
     return result
 
 
-def full_select_above ( a, virtual_places, data, minValue, toJoin = True ) -> (np.ndarray, np.ndarray):
+def full_select_above ( a:tuple, virtual_places:list, data:dict, minValue:float, toJoin:bool = False ) -> (
+        np.ndarray, np.ndarray):
     a_array, a_valsPic = a
     physical_places, places_valsPic = p_get_virtual_valsPic( a_valsPic, virtual_places ), p_make_valsPic(
         virtual_places, np.shape( a_valsPic ) )
