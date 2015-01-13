@@ -114,46 +114,47 @@ def _Create_ArgumentsDictionary ( lst ):
 #region Query Tree
 # The number presents the amount of tabs before
 
-def QueryTree_Create_Dictionaries ( lst ) -> list:
+def QueryTree_Create_Dictionaries ( lst, addon:int = 0 ) -> list:
     result = []
 
     for predicat in lst:
-        result.append( (predicat + " = MainDict[\"" + predicat + "\"]", 0) )
+        result.append( (predicat + " = MainDict[\"" + predicat + "\"]", addon + 0) )
 
     return result
 
 
-def QueryTree_Create_RuleArgs ( block, num:int ) -> list:
+def QueryTree_Create_RuleArgs ( block, num:int, addon:int = 0 ) -> list:
     result = []
     predicat, physic = block.Predicat, block.PhysicalVarsPic
 
-    result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", 0) )
-    result.append( ("start_block_" + str( num ) + " = (" + predicat + ", start_block_valsPic_" + str( num ) + ")", 0) )
+    result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", addon) )
+    result.append(
+        ("start_block_" + str( num ) + " = (" + predicat + ", start_block_valsPic_" + str( num ) + ")", addon) )
     return result
 
 
-def QueryTree_Create_Filter ( rule, num:int ) -> list:
+def QueryTree_Create_Filter ( block, num:int, addon:int = 0 ) -> list:
     result = []
-    predicat, physic, matches = rule.Predicat, rule.PhysicalVarsPic, rule.Matches
+    predicat, physic, matches = block.Predicat, block.PhysicalVarsPic, block.Matches
 
-    result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", 0) )
+    result.append( ("start_block_valsPic_" + str( num ) + "=np.array(" + str( physic ) + ", dtype=np.int32))", addon) )
     result.append( ("start_block_" + str( num ) + " = cl.filter((" + predicat + ", start_block_valsPic_" + \
-                    str( num ) + "),np.array(" + str( matches ) + ", dtype=np.int32))", 0) )
-    result.append( ("_size = np.shape(start_block_" + str( num ) + ")[0]", 0) )
-    result.append( ("if _size == 0:", 0) )
-    result.append( ("return np.zeros((0, 0), dtype=np.int32)", 1) )
+                    str( num ) + "),np.array(" + str( matches ) + ", dtype=np.int32))", addon) )
+    result.append( ("_size = np.shape(start_block_" + str( num ) + ")[0]", addon) )
+    result.append( ("if _size == 0:", addon) )
+    result.append( ("return np.zeros((0, 0), dtype=np.int32)", addon + 1) )
 
     return result
 
 
-def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str = "join" ) -> list:
+def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str = "join", addon:int = 0 ) -> list:
     joinLst = []
     result = []
     interval = 0
     count = 0
 
     if len( lst ) is 1:
-        result.append( (out_name + "_0_0 = " + in_name + "_0", 0) )
+        result.append( (out_name + "_0_0 = " + in_name + "_0", addon) )
         return result, [(0, 0)]
 
     while len( lst ) > 0:
@@ -162,14 +163,16 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
             b = lst.pop( 0 )
             command = out_name + "_" + str( interval ) + "_" + str( count ) + "=cl.join(" + in_name + "_" + str( a )
             command = command + "," + in_name + "_" + str( b ) + ")"
-            result.append( (command, 0) )
-            result.append( ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", 0) )
-            result.append( ("if _size is 0:", 0) )
-            result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), 1) )
+            result.append( (command, addon) )
+            result.append(
+                ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", addon) )
+            result.append( ("if _size is 0:", addon) )
+            result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), addon + 1) )
             joinLst.append( (interval, count) )
             count = count + 1
         else:
-            result.append( (out_name + "_" + str( interval ) + "_" + str( count ) + "=" + in_name + "_" + str( a )) )
+            result.append(
+                (out_name + "_" + str( interval ) + "_" + str( count ) + "=" + in_name + "_" + str( a ), addon) )
             joinLst.append( (interval, count) )
 
     while len( joinLst ) is not 1:
@@ -179,38 +182,39 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
 
         while len( joinLst ) > 0:
             a = joinLst.pop( 0 )
-            if len( lst ) > 0:
-                b = lst.pop( 0 )
+            if len( joinLst ) > 0:
+                b = joinLst.pop( 0 )
                 command = out_name + "_" + str( interval ) + "_" + str( count ) + "=cl.join(" + out_name + "_" + str(
                     a [0] ) + "_" + str(
                     a [1] )
                 command = command + "," + out_name + "_" + str( b [0] ) + "_" + str( b [1] ) + ")"
-                result.append( (command, 0) )
+                result.append( (command, addon) )
 
                 result.append(
-                    ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", 0) )
-                result.append( ("if _size is 0:", 0) )
-                result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), 1) )
+                    ("_size = np.shape((" + out_name + "_" + str( interval ) + "_" + str( count ) + ")[0])", addon) )
+                result.append( ("if _size is 0:", addon) )
+                result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), addon + 1) )
 
                 temp.append( (interval, count) )
                 count = count + 1
-        else:
-            result.append(
-                (
-                    out_name + "_" + str( interval ) + "_" + str( count ) + "=" + out_name + "_" + str(
-                        a [0] ) + "_" + str(
-                        a [1] ), 0) )
-            temp.append( (interval, count) )
+            else:
+                result.append(
+                    (
+                        out_name + "_" + str( interval ) + "_" + str( count ) + "=" + out_name + "_" + str(
+                            a [0] ) + "_" + str(
+                            a [1] ), addon) )
+                temp.append( (interval, count) )
 
         joinLst = temp
 
     result.append(
-        "final_" + out_name + " = " + out_name + "_" + str( joinLst [0] [0] ) + "_" + str( joinLst [0] [1] ) )
+        ("final_" + out_name + " = " + out_name + "_" + str( joinLst [0] [0] ) + "_" + str( joinLst [0] [1] ), addon) )
 
     return result, joinLst [0]
 
 
-def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str, in_name:str = "join" ) -> list:
+def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str = "MainDict", in_name:str = "join",
+                                   addon:int = 0 ) -> list:
     result = []
     count = 0
 
@@ -219,17 +223,17 @@ def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str, in_name:str = "
             rule.Body [ptr].VirtualVarsPic )
         command = command + ", MainDict[\"" + dictName + "\"], " + str( float( rule.Body [ptr].Notation ) ) + ")"
 
-        result.append( (command, 0) )
-        result.append( ("_size = np.shape(select_" + str( count ) + ")") )
-        result.append( ("if _size[0] is 0:", 0) )
-        result.append( ("return select_" + str( count ), 1) )
+        result.append( (command, addon) )
+        result.append( ("_size = np.shape(select_" + str( count ) + ")", addon) )
+        result.append( ("if _size[0] is 0:", addon) )
+        result.append( ("return select_" + str( count ), addon + 1) )
 
     tmp = QueryTree_Create_Join( lst, "select", "select_join" )
     joinLst, target = tmp
     result = result + joinLst
 
     command = "def_zone = cl.join(final_select_join, final_join)"
-    result.append( (command, 0) )
+    result.append( (command, addon + 0) )
 
     return result
 #endregion
@@ -300,11 +304,15 @@ class GAP_Rule:
     def __init__ ( self, rule:str ):
         headerBlock, bodyBlock, args = _Parse_Rule( rule )
         self.Dictionary = _Create_ArgumentsDictionary( args )
-        self.Body = []
+        self.Body, self.Atoms = [], []
         self.Header = GAP_Block( headerBlock, self.Dictionary )
+
+        self.Atoms.append( headerBlock [0] )
 
         for block in bodyBlock:
             self.Body.append( GAP_Block( block, self.Dictionary ) )
+            if block [0] not in self.Atoms:
+                self.Atoms.append( block [0] )
 
         self.Body.sort( )
 
@@ -322,6 +330,30 @@ class GAP_Rule:
     def __repr__ ( self ):
         return self.__str__( )
 
+    def Create_DefinitionZone ( self, dictName:str = "MainDict" ) -> list:
+        result = []
+        aboveLst = []
+
+        result = result + QueryTree_Create_Dictionaries( self.Atoms )
+        for i in range( len( self.Body ) ):
+            block = self.Body [i]
+
+            if len( block.Matches ) is 0:
+                result = result + QueryTree_Create_RuleArgs( block, i )
+            else:
+                result = result + QueryTree_Create_Filter( block, i )
+
+            if block.Type is BlockType.ABOVE:
+                aboveLst.append( i )
+
+        result = result + QueryTree_Create_Join( list( range( 0, len( self.Body ) ) ) ) [0]
+
+        if len( aboveLst ) > 0:
+            result = result + QueryTree_Create_SelectAbove( aboveLst, self, dictName )
+        else:
+            result.append( ("def_zone = final_join", 0) )
+
+        return result
 
 #endregion
 
@@ -343,18 +375,16 @@ compiler = GAP_Compiler( )
 compiler.Load( "../External/Rules/Pi4m.gap" )
 
 rule = compiler.Rules [0]
-result = QueryTree_Create_RuleArgs( rule.Body [0], 0 )
-result = result + QueryTree_Create_RuleArgs( rule.Body [1], 1 )
-result = result + QueryTree_Create_RuleArgs( rule.Body [2], 2 )
-result = result + QueryTree_Create_Filter( rule.Body [3], 3 )
-result = result + QueryTree_Create_RuleArgs( rule.Body [4], 4 )
 
-lst = list( range( 0, 4 ) )
+result = rule.Create_DefinitionZone( )
 
-join_result = QueryTree_Create_Join( lst )
+for line in result:
+    text, tabsCount = line
 
-select_result = QueryTree_Create_SelectAbove( [4], rule, "MainDict" )
+    command = ""
+    for i in range( tabsCount ):
+        command = command + "\t"
 
-result = result + join_result [0] + select_result
+    command = command + text
 
-result0 = QueryTree_Create_Filter( rule.Body [3], 3 )
+    print( command )
