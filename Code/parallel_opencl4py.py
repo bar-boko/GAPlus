@@ -1,3 +1,9 @@
+"""
+GAPlus - GAP Parallel Compiler using OpenCL
+By Bar Bokovza
+
+This is the layer that connects to the OpenCL and return results based on what is sended there.
+"""
 __author__ = 'Bar Bokovza'
 
 import opencl4py as cl

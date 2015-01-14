@@ -1,4 +1,14 @@
+"""
+GAPlus - GAP Parallel Compiler using OpenCL
+By Bar Bokovza
+
+This is the compiler python file
+It get's list of GAP rule, analyse it and return python code to run.
+The code that are retrieved are in python, but the CL functions are the OpenCL functions that runs underneath
+"""
 __author__ = "Bar Bokovza"
+
+# noinspection PyPep8
 
 # region IMPORTS
 from enum import Enum
@@ -11,12 +21,15 @@ import Code.validation as valid
 
 # region ENUMS
 class BlockType( Enum ):
+    """ Presents the type of block from shape atom(args):notation """
     UNKNOWN = 0
     ANNOTATION = 1
     ABOVE = 2
 
-
 class RuleType( Enum ):
+    """
+    presents the type of GAP rule
+    """
     UNKNOWN = 0
     ONCE_HEADER = 1
     GROUND = 2
@@ -27,7 +40,7 @@ class RuleType( Enum ):
 
 # endregion
 
-#region p_ Functions
+# region p_ Functions
 
 def _Parse_Block ( block ) -> (str, list, str, BlockType):
     """
@@ -47,7 +60,13 @@ def _Parse_Block ( block ) -> (str, list, str, BlockType):
     return atom, args, notation
 
 
-def _Parse_Rule ( rule ) -> (tuple, list, list):  # (headerBlock, body_lst)
+# noinspection PyPep8Naming
+def _Parse_Rule ( rule:str ) -> (tuple, list, list):  # (headerBlock, body_lst)
+    """
+    gets a string of rule, and return a tuple with header, body and a list of args that are avaliable in the rule
+    :param rule: GAP Rule in string
+    :return: simplified header, simplified items in body, and list of arguments that are in the rule.
+    """
     args = []
 
     rule = rule.replace( " ", "" )
@@ -70,16 +89,28 @@ def _Parse_Rule ( rule ) -> (tuple, list, list):  # (headerBlock, body_lst)
     return headerBlock, body_lst, args
 
 
-def _Create_VirtualVarsPic ( arguments, dict ) -> np.ndarray:
+def _Create_VirtualVarsPic ( arguments, dictionary ) -> np.ndarray:
+    """
+    transform arg variables from names to numbers
+    :param arguments: list of arguments of a block
+    :param dictionary: dictionary of arguments
+    :return: the list of arguments in numbers instead of names
+    """
     virtual = []
 
     for arg in arguments:
-        virtual.append( dict [arg] )
+        virtual.append( dictionary [arg] )
 
     return np.array( virtual, dtype = np.int32 )
 
 
-def _Create_PhysicalVarsPic ( virtual, size ):
+def _Create_PhysicalVarsPic ( virtual:np.ndarray, size:int ) -> np.ndarray:
+    """
+    transform virtual pic to physical pic
+    :param virtual: the virtual variables picture
+    :param size: the amount of unique arguments in rule
+    :return:physical variables picture of the virtual that we got as a parameter
+    """
     result = np.zeros( size, dtype = np.int32 )
     result.fill( -1 )
 
@@ -89,7 +120,7 @@ def _Create_PhysicalVarsPic ( virtual, size ):
     for ptr in virtual:
         if result [ptr] == -1:
             result [ptr] = count
-            count = count + 1
+            count += 1
         else:
             matches.append( (result [ptr], count) )
 
@@ -97,6 +128,11 @@ def _Create_PhysicalVarsPic ( virtual, size ):
 
 
 def _Create_ArgumentsDictionary ( lst ):
+    """
+    create dictionary of arguments variables based on the list of args that we get from parameter
+    :param lst: list of arguments variables in names
+    :return: dictionary of that list
+    """
     result = {}
     count = 0
 
@@ -104,7 +140,7 @@ def _Create_ArgumentsDictionary ( lst ):
         for arg in args:
             if not arg in result:
                 result [arg] = count
-                count = count + 1
+                count += 1
 
     return result
 
@@ -115,6 +151,12 @@ def _Create_ArgumentsDictionary ( lst ):
 # The number presents the amount of tabs before
 
 def QueryTree_Create_Dictionaries ( lst, addon:int = 0 ) -> list:
+    """
+    create python code for
+    :param lst: list of predicats in the rules
+    :param addon: how many tabs to add to the command
+    :return: python commands in list and amount of tabs needed
+    """
     result = []
 
     for predicat in lst:
@@ -122,8 +164,14 @@ def QueryTree_Create_Dictionaries ( lst, addon:int = 0 ) -> list:
 
     return result
 
-
 def QueryTree_Create_RuleArgs ( block, num:int, addon:int = 0 ) -> list:
+    """
+    create python code for block that does not need filter
+    :param block: GAP Block in GAP_Block form
+    :param num: index of the gap block
+    :param addon: how many tabs to end to the beginning of the code
+    :return: list of python commands
+    """
     result = []
     predicat, physic = block.Predicat, block.PhysicalVarsPic
 
@@ -132,8 +180,14 @@ def QueryTree_Create_RuleArgs ( block, num:int, addon:int = 0 ) -> list:
         ("start_block_" + str( num ) + " = (" + predicat + ", start_block_valsPic_" + str( num ) + ")", addon) )
     return result
 
-
 def QueryTree_Create_Filter ( block, num:int, addon:int = 0 ) -> list:
+    """
+    create python code for block that needs to pass filtering
+    :param block: GAP Block in GAP_Block form
+    :param num: index of the gap block
+    :param addon: how many tabs to end to the beginning of the code
+    :return: list of python commands
+    """
     result = []
     predicat, physic, matches = block.Predicat, block.PhysicalVarsPic, block.Matches
 
@@ -148,6 +202,14 @@ def QueryTree_Create_Filter ( block, num:int, addon:int = 0 ) -> list:
 
 
 def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str = "join", addon:int = 0 ) -> list:
+    """
+    create python code for the join process in the "Definition Zone" paradigm.
+    :param lst: list of indexes
+    :param in_name: name of the starting tables
+    :param out_name: name of the output tables
+    :param addon: how many tabs to add to the beginning of the code
+    :return: list of python commands
+    """
     joinLst = []
     result = []
     interval = 0
@@ -169,7 +231,7 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
             result.append( ("if _size is 0:", addon) )
             result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), addon + 1) )
             joinLst.append( (interval, count) )
-            count = count + 1
+            count += 1
         else:
             result.append(
                 (out_name + "_" + str( interval ) + "_" + str( count ) + "=" + in_name + "_" + str( a ), addon) )
@@ -177,7 +239,7 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
 
     while len( joinLst ) is not 1:
         temp = []
-        interval = interval + 1
+        interval += 1
         count = 0
 
         while len( joinLst ) > 0:
@@ -196,7 +258,7 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
                 result.append( ("return " + out_name + "_" + str( interval ) + "_" + str( count ), addon + 1) )
 
                 temp.append( (interval, count) )
-                count = count + 1
+                count += 1
             else:
                 result.append(
                     (
@@ -215,6 +277,15 @@ def QueryTree_Create_Join ( lst:list, in_name:str = "start_block", out_name:str 
 
 def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str = "MainDict", in_name:str = "join",
                                    addon:int = 0 ) -> list:
+    """
+    creating python code based on the SELECT ABOVE in the "Definition Zone" paradigm.
+    :param lst: list of indexes
+    :param rule: the rule that we check what needs select above
+    :param dictName: the dictionary that holds all the data structures
+    :param in_name: the input name of the tables
+    :param addon: how many tabs we need to add to the beginning of the table
+    :return: list of python commands
+    """
     result = []
     count = 0
 
@@ -236,10 +307,16 @@ def QueryTree_Create_SelectAbove ( lst:list, rule, dictName:str = "MainDict", in
     result.append( (command, addon + 0) )
 
     return result
+
+
 #endregion
 
 #region GAP Block
 class GAP_Block:
+    """
+    This is the class of GAP Block
+    it analyses GAP block and save all the needed data for it.
+    """
     def __init__ ( self, parsed:tuple, dictionary:dict ):
         predicat, arguments, notation = parsed
         self.Predicat, self.Notation = predicat, notation
@@ -256,6 +333,10 @@ class GAP_Block:
         self.PhysicalVarsPic, self.Matches = _Create_PhysicalVarsPic( self.VirtualVarsPic, size )
 
     def Bool_NeedFilter ( self ) -> bool:
+        """
+        return true if the arguments in the block needs to pass Filtering
+        :return: true or false
+        """
         return not len( self.Matches ) is 0
 
     def __str__ ( self ):
@@ -270,6 +351,11 @@ class GAP_Block:
         return self.__str__( )
 
     def p_cmp ( self, other ):
+        """
+        compare function
+        :param other: the other object to compare to
+        :return: how much the objects are different
+        """
         if self.Type.value is not other.Type.value:
             return self.Type.value - other.Type.value
 
@@ -301,6 +387,9 @@ class GAP_Block:
 
 #region GAP Rule
 class GAP_Rule:
+    """
+    it analyses and save all the data needed for a single gap rule.
+    """
     def __init__ ( self, rule:str ):
         headerBlock, bodyBlock, args = _Parse_Rule( rule )
         self.Dictionary = _Create_ArgumentsDictionary( args )
@@ -323,14 +412,20 @@ class GAP_Rule:
         for i in range( 0, len( self.Body ) - 1 ):
             result = result + self.Body [i].__str__( )
             if i + 1 < len( self.Body ):
-                result = result + " & "
+                result += " & "
 
         return result
 
     def __repr__ ( self ):
         return self.__str__( )
 
+    # noinspection PyShadowingNames,PyPep8Naming
     def Create_DefinitionZone ( self, dictName:str = "MainDict" ) -> list:
+        """
+        create python rule in the "Definition Zone" paradigm
+        :param dictName: the name of the dictionary that holds all the data structure
+        :return: list of python commands
+        """
         result = []
         aboveLst = []
 
@@ -355,14 +450,23 @@ class GAP_Rule:
 
         return result
 
+
 #endregion
 
 #region GAP Compiler
 class GAP_Compiler:
+    """
+    it loads a gap file (of more than 1) and compile the rules to python code
+    """
     def __init__ ( self ):
         self.Rules = []
 
     def Load ( self, path ):
+        """
+        load a single gap file into the compiler
+        :param path: Gap file path
+        :return: void
+        """
         filer = open( path, "r" )
 
         for line in filer.readlines( ):
@@ -383,7 +487,7 @@ for line in result:
 
     command = ""
     for i in range( tabsCount ):
-        command = command + "\t"
+        command += "\t"
 
     command = command + text
 
