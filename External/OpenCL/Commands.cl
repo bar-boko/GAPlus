@@ -64,7 +64,7 @@ void SIMPLE_JOIN(__global const int* a, int a_col, __global const int* a_valuesP
 
 }
 
-/// this fuction do join based on more than 1 variable.
+/// this function do join based on more than 1 variable.
 __kernel
 void COMPLEX_JOIN(__global const int* a, int a_col, __global const int* a_valuesPic,
                 __global const int* b, int b_col, __global const int* b_valuesPic,

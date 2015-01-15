@@ -6,11 +6,11 @@ Service python code only
 """
 __author__ = "Bar Bokovza"
 
-
-def IsFloat ( number ) -> bool:
+def IsFloat (number) -> bool:
+    # noinspection PyBroadException
     try:
-        float( number )
-    except:
+        float(number)
+    except Exception:
         return False
     return True
 

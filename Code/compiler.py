@@ -1,211 +1,561 @@
+"""
+GAPlus - GAP Parallel Compiler using OpenCL
+By Bar Bokovza
+
+This is the compiler python file
+It get's list of GAP rule, analyse it and return python code to run.
+The code that are retrieved are in python, but the CL functions are the OpenCL functions that runs underneath
+"""
 __author__ = "Bar Bokovza"
 
+# noinspection PyPep8
+
+# region IMPORTS
 from enum import Enum
-import copy
-from functools import cmp_to_key
 
 import numpy as np
 
 import Code.validation as valid
 
+# endregion
 
-class BlockType( Enum ):
-    UNKNOWN_BLOCK = 0
-    ANNOTATION_BLOCK = 1
-    ABOVE_BLOCK = 2
-
-class RuleType( Enum ):
+# region ENUMS
+class BlockType(Enum):
+    """ Presents the type of block from shape atom(args):notation """
     UNKNOWN = 0
-    ONCE_HEADER_RULE = 1
-    GROUND_RULE = 2
-    HEADER_RULE = 3
-    BASIC_RULE = 4
-    COMPLEX_RULE = 5
+    ANNOTATION = 1
+    ABOVE = 2
 
+class RuleType(Enum):
+    """
+    presents the type of GAP rule
+    """
+    UNKNOWN = 0
+    ONCE_HEADER = 1
+    GROUND = 2
+    HEADER = 3
+    BASIC = 4
+    COMPLEX = 5
 
-def create_varsPic_matches ( args, varsDict ) -> tuple:  # (result, matches)
-    matches = []
-    size = len( varsDict.keys( ) )
-    result = np.zeros( size, dtype = np.int32 )
+# endregion
 
-    for i in range( 0, size ):
-        result [i] = -1
+# region p_ Functions
 
-    count = 0
-    for arg in args:
-        if not arg in varsDict.keys( ):
-            raise ValueError( "The wrong dictionary have been sent to the function." )
-
-        idx = varsDict [arg]
-
-        if result [idx] == -1:
-            result [idx] = count
-        else:
-            matches.append( (result [idx], count) )
-
-        count = count + 1
-
-    return result, matches
-
-
-def parse ( rules ) -> list:  # (headerBlock, body_lst)
-    result = []
-    for rule in rules:
-        rule = rule.replace( " ", "" )
-        rule = rule.replace( "(", "," )
-        rule = rule.replace( ")", "" )
-        rule = rule.replace( "[", "," )
-        rule = rule.replace( "]", "" )
-        str_header, str_body = rule.split( "<-" )
-
-        headerBlock = parse_block( str_header )
-        if headerBlock [3] != BlockType.ANNOTATION_BLOCK:
-            raise ValueError( "In Header the block must be an annotation block." )
-
-        body_lst = []
-
-        for block in str_body.split( "&" ):
-            parsedBlock = parse_block( block )
-            body_lst.append( parsedBlock )
-
-        result.append( (headerBlock, body_lst) )
-
-    return result
-
-
-def parse_block ( block ) -> (str, list, str, BlockType):
+def _Parse_Block (block) -> (str, list, str, BlockType):
     """
     Gets a block in a GAP Rule and return a tuple of (atom, args, notation, blockType)
     :param block:
     :return: tuple => (atom:str, args:list, notation:str, blockType:BlockType)
     :raise ValueError:
     """
-    predicat, notation = block.split( ":" )
-    blockType = BlockType.UNKNOWN_BLOCK
-    if valid.IsFloat( notation ):
-        blockType = BlockType.ABOVE_BLOCK
-    else:
-        blockType = BlockType.ANNOTATION_BLOCK
+    predicat, notation = block.split(":")
 
-    atoms = predicat.split( "," )
-    if len( atoms ) < 2:
-        raise ValueError( "The predicat '" + predicat + "' does not have an atom and arguments" )
+    atoms = predicat.split(",")
+    if len(atoms) < 2:
+        raise ValueError("The predicat '" + predicat + "' does not have an atom and arguments")
 
-    atom, args = atoms [0], atoms [1:]
+    atom, args = atoms[0], atoms[1:]
 
-    return atom, args, notation, blockType
+    return atom, args, notation
 
+# noinspection PyPep8Naming
+def _Parse_Rule (rule:str) -> (tuple, list, list):  # (headerBlock, body_lst)
+    """
+    gets a string of rule, and return a tuple with header, body and a list of args that are avaliable in the rule
+    :param rule: GAP Rule in string
+    :return: simplified header, simplified items in body, and list of arguments that are in the rule.
+    """
+    args = []
 
-def cmp_analyse_rule ( a, b ) -> int:
-    a_atom, a_arguments, a_notation, a_type, a_valsPic, a_matches = a
-    b_atom, b_arguments, b_notation, b_type, b_valsPic, b_matches = b
+    rule = rule.replace(" ", "")
+    rule = rule.replace("(", ",")
+    rule = rule.replace(")", "")
+    rule = rule.replace("[", ",")
+    rule = rule.replace("]", "")
+    str_header, str_body = rule.split("<-")
 
-    if a_type != b_type:
-        return a_type.value - b_type.value
+    headerBlock = _Parse_Block(str_header)
+    args.append(headerBlock[1])
 
-    if len( a_arguments ) < len( b_arguments ):
-        return -1
-    if len( b_arguments ) < len( a_arguments ):
-        return 1
+    body_lst = []
 
-    if len( a_matches ) < len( b_matches ):
-        return -1
-    if len( b_matches ) < len( a_matches ):
-        return 1
+    for block in str_body.split("&"):
+        parsedBlock = _Parse_Block(block)
+        body_lst.append(parsedBlock)
+        args.append(parsedBlock[1])
 
-    return 0
+    return headerBlock, body_lst, args
 
-def analyse_rule ( rule ):
-    arg_dict = {}
-    predicats = []
+def _Create_VirtualVarsPic (arguments, dictionary) -> np.ndarray:
+    """
+    transform arg variables from names to numbers
+    :param arguments: list of arguments of a block
+    :param dictionary: dictionary of arguments
+    :return: the list of arguments in numbers instead of names
+    """
+    virtual = []
+
+    for arg in arguments:
+        virtual.append(dictionary[arg])
+
+    return np.array(virtual, dtype = np.int32)
+
+def _Create_PhysicalVarsPic (virtual:np.ndarray, size:int) -> np.ndarray:
+    """
+    transform virtual pic to physical pic
+    :param virtual: the virtual variables picture
+    :param size: the amount of unique arguments in rule
+    :return:physical variables picture of the virtual that we got as a parameter
+    """
+    result = np.zeros(size, dtype = np.int32)
+    result.fill(-1)
+
+    count = 0
+    matches = []
+
+    for ptr in virtual:
+        if result[ptr] == -1:
+            result[ptr] = count
+            count += 1
+        else:
+            matches.append((result[ptr], count))
+
+    return result, matches
+
+def _Create_ArgumentsDictionary (lst):
+    """
+    create dictionary of arguments variables based on the list of args that we get from parameter
+    :param lst: list of arguments variables in names
+    :return: dictionary of that list
+    """
+    result = { }
     count = 0
 
-    headerBlock, bodyBlocks = rule
-
-    blockLst = copy.deepcopy( bodyBlocks )
-    blockLst.append( headerBlock )
-
-    finalLst = []
-
-    for block in blockLst:
-        atom, args, notation, type = block
-        if not atom in predicats:
-            predicats.append( atom )
+    for args in lst:
         for arg in args:
-            if not arg in arg_dict:
-                arg_dict [arg] = count
-                count = count + 1
+            if not arg in result:
+                result[arg] = count
+                count += 1
 
-    for block in blockLst:
-        atom, args, notation, type = block
-        varPic, matches, = create_varsPic_matches( args, arg_dict )
-        finalLst.append( (atom, args, notation, type, varPic, matches) )
+    return result
 
-    headerRes = finalLst [len( finalLst ) - 1]
-    bodyRes = finalLst [0:len( finalLst ) - 1]
+# endregion
 
-    bodyRes = sorted( bodyRes, key = cmp_to_key( cmp_analyse_rule ) )
+# region Query Tree
+# The number presents the amount of tabs before
 
-    return (headerRes, bodyRes)
+def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
+    """
+    create python code for
+    :param lst: list of predicats in the rules
+    :param addon: how many tabs to add to the command
+    :return: python commands in list and amount of tabs needed
+    """
+    result = []
 
-def cmp_bodyBlock ( a, b ) -> int:
-    a_varPic, b_varPic = a [4], b [4]
-    a_count, b_count = 0, 0
+    for predicat in lst:
+        #result.append((predicat + " = MainDict[\"" + predicat + "\"]", addon + 0))
+        result.append(("{0}=MainDict[\"{0}\"]".format(predicat), addon))
 
-    for item in a_varPic:
-        if item != -1:
-            a_count = a_count + 1
+    return result
 
-    for item in b_varPic:
-        if item != -1:
-            b_count = a_count + 1
+def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
+    """
+    create python code for block that does not need filter
+    :param block: GAP Block in GAP_Block form
+    :param num: index of the gap block
+    :param addon: how many tabs to end to the beginning of the code
+    :return: list of python commands
+    """
+    result = []
+    predicat, physic = block.Predicat, block.PhysicalVarsPic
 
-    if a_count > b_count:
-        return -1
-    if a_count < b_count:
-        return 1
-    return 0
+    #result.append(("start_block_valsPic_" + str(num) + "=np.array(" + str(physic) + ", dtype=np.int32))", addon))
+    #result.append(("start_block_" + str(num) + " = (" + predicat + ", start_block_valsPic_" + str(num) + ")", addon))
 
+    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic), addon))
+    result.append(("start_block_{0}=({1},start_block_varsPic_{0})".format(num, predicat), addon))
 
+    return result
+
+def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
+    """
+    create python code for block that needs to pass filtering
+    :param block: GAP Block in GAP_Block form
+    :param num: index of the gap block
+    :param addon: how many tabs to end to the beginning of the code
+    :return: list of python commands
+    """
+    result = []
+    predicat, physic, matches = block.Predicat, block.PhysicalVarsPic, block.Matches
+
+    #result.append(("start_block_valsPic_" + str(num) + "=np.array(" + str(physic) + ", dtype=np.int32))", addon))
+    #result.append((
+    #    "start_block_" + str(num) + " = gpu.Filter((" + predicat + ", start_block_valsPic_" + str(
+    #        num) + "),np.array(" + str(matches) + ", dtype=np.int32))", addon))
+    #result.append(("_size = np.shape(start_block_" + str(num) + ")[0]", addon))
+    #result.append(("if _size == 0:", addon))
+    #result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
+
+    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic), addon))
+    result.append((
+        "start_block_{0}=gpu.Filter(({1},start_block_varsPic_{0}), np.array({2},dtype=np.int)".format(num, predicat,
+                                                                                                      matches), addon))
+    result.append(("_size=np.shape(start_block_{0})[0]".format(num), addon))
+    result.append(("if _size is 0:", addon))
+    result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
+
+    return result
+
+def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str = "join", addon:int = 0) -> list:
+    """
+    create python code for the join process in the "Definition Zone" paradigm.
+    :rtype : list
+    :param lst: list of indexes
+    :param in_name: name of the starting tables
+    :param out_name: name of the output tables
+    :param addon: how many tabs to add to the beginning of the code
+    :return: list of python commands
+    """
+    joinLst = []
+    result = []
+    interval = 0
+    count = 0
+
+    if len(lst) is 1:
+        result.append((out_name + "_0_0 = " + in_name + "_0", addon))
+        return result, [(0, 0)]
+
+    while len(lst) > 0:
+        a = lst.pop(0)
+        if len(lst) > 0:
+            b = lst.pop(0)
+            #command = out_name + "_" + str(interval) + "_" + str(count) + "=gpu.Join(" + in_name + "_" + str(a)
+            command = "{0}_{1}_{2}=gpu.Join({3}_{4},{3}_{5})".format(out_name, interval, count, in_name, a, b)
+            result.append((command, addon))
+            command = "_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count)
+            result.append((command, addon))
+            #result.append(("_size = np.shape((" + out_name + "_" + str(interval) + "_" + str(count) + ")[0])", addon))
+            result.append(("if _size is 0:", addon))
+            result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
+            #result.append(("return " + out_name + "_" + str(interval) + "_" + str(count), addon + 1))
+            joinLst.append((interval, count))
+            count += 1
+        else:
+            #result.append((out_name + "_" + str(interval) + "_" + str(count) + "=" + in_name + "_" + str(a), addon))
+            result.append(("{0}_{1}_{2}={3}_{4}".format(out_name, interval, count, in_name, a), addon))
+            joinLst.append((interval, count))
+
+    while len(joinLst) is not 1:
+        temp = []
+        interval += 1
+        count = 0
+
+        while len(joinLst) > 0:
+            a = joinLst.pop(0)
+            if len(joinLst) > 0:
+                b = joinLst.pop(0)
+                #command = out_name + "_" + str(interval) + "_" + str(count) + "=gpu.Join(" + out_name + "_" + str(
+                #    a[0]) + "_" + str(a[1])
+                command = "{0}_{1}_{2}=gpu.Join({0}_{3}_{4},{0},{5},{6})".format(out_name, interval, count, a[0], a[1],
+                                                                                 b[0], b[1])
+                #command += "," + out_name + "_" + str(b[0]) + "_" + str(b[1]) + ")"
+                result.append((command, addon))
+
+                #result.append(
+                #    ("_size = np.shape((" + out_name + "_" + str(interval) + "_" + str(count) + ")[0])", addon))
+                result.append(("_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count), addon))
+                result.append(("if _size is 0:", addon))
+                #result.append(("return " + out_name + "_" + str(interval) + "_" + str(count), addon + 1))
+                result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
+
+                temp.append((interval, count))
+                count += 1
+            else:
+                #result.append((
+                #    out_name + "_" + str(interval) + "_" + str(count) + "=" + out_name + "_" + str(a[0]) + "_" + str(
+                #        a[1]), addon))
+                result.append(("{0}_{1}_{2}={0}_{3}_{4}".format(out_name, interval, count, a[0], a[1]), addon))
+                temp.append((interval, count))
+
+        joinLst = temp
+
+    #result.append(("final_" + out_name + " = " + out_name + "_" + str(joinLst[0][0]) + "_" + str(joinLst[0][1]), addon))
+    result.append(("final_{0}={0}_{1}_{2}".format(out_name, joinLst[0][0], joinLst[0][1]), addon))
+
+    return result, joinLst[0]
+
+def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_name:str = "join",
+                                  addon:int = 0) -> list:
+    """
+    creating python code based on the SELECT ABOVE in the "Definition Zone" paradigm.
+    :rtype: list
+    :param lst: list of indexes
+    :param rule: the rule that we check what needs select above
+    :param dictName: the dictionary that holds all the data structures
+    :param in_name: the input name of the tables
+    :param addon: how many tabs we need to add to the beginning of the table
+    :return: list of python commands
+    """
+    result = []
+    count = 0
+
+    for ptr in lst:
+        #command = "select_" + str(count) + " = gpu.SelectAbove_Full(final_" + in_name + ", " + str(
+        #    rule.Body[ptr].VirtualVarsPic)
+        command = "select_{0}=gpu.SelectAbove_Full(final_{1},{2}, MainDict[\"{3}\"],{4})".format(count, in_name,
+                                                                                                 rule.Body[
+                                                                                                     ptr].VirtualVarsPic,
+                                                                                                 dictName, rule.Body[
+                                                                                                     ptr].Notation)
+
+        #command += ", MainDict[\"" + dictName + "\"], " + str(float(rule.Body[ptr].Notation)) + ")"
+
+        result.append((command, addon))
+        #result.append(("_size = np.shape(select_" + str(count) + ")", addon))
+        result.append(("_size=np.shape(select_{0})".format(count), addon))
+        result.append(("if _size[0] is 0:", addon))
+        result.append(("return select_{0}".format(count), addon + 1))
+        #result.append(("return select_" + str(count), addon + 1))
+
+    tmp = QueryTree_Create_Join(lst, "select", "select_join", addon = addon)
+    joinLst, target = tmp
+    result = result + joinLst
+
+    #command = "def_zone = gpu.Join(final_select_join, final_join)"
+    result.append(("return gpu.Join(final_select_join, final_join)", addon))
+
+    return result
+
+# endregion
+
+# region GAP Block
+class GAP_Block:
+    """
+    This is the class of GAP Block
+    it analyses GAP block and save all the needed data for it.
+    """
+
+    def __init__ (self, parsed:tuple, dictionary:dict):
+        predicat, arguments, notation = parsed
+        self.Predicat, self.Notation = predicat, notation
+
+        self.Notation = self.Notation.replace("\n", "")
+        self.Notation = self.Notation.replace("\r", "")
+
+        self.Type = BlockType.ANNOTATION
+        if valid.IsFloat(self.Notation):
+            self.Type = BlockType.ABOVE
+
+        self.VirtualVarsPic = _Create_VirtualVarsPic(arguments, dictionary)
+        size = len(dictionary)
+        self.PhysicalVarsPic, self.Matches = _Create_PhysicalVarsPic(self.VirtualVarsPic, size)
+
+    def Bool_NeedFilter (self) -> bool:
+        """
+
+        return true if the arguments in the block needs to pass Filtering
+        :return: true or false
+        :rtype: bool
+        """
+        return not len(self.Matches) is 0
+
+    def __str__ (self):
+        result = self.Predicat + " ("
+        for num in self.VirtualVarsPic:
+            result += int(num).__str__() + " "
+
+        result += "): " + self.Notation
+        return result
+
+    def __repr__ (self):
+        return self.__str__()
+
+    def p_cmp (self, other):
+        """
+        compare function
+        :param other: the other object to compare to
+        :return: how much the objects are different
+        """
+        if self.Type.value is not other.Type.value:
+            return self.Type.value - other.Type.value
+
+        if len(self.Matches) is not len(other.Matches):
+            return len(self.Matches) - len(other.Matches)
+
+        if np.shape(self.VirtualVarsPic) is not np.shape(other.VirtualVarsPic):
+            return np.shape(self.VirtualVarsPic)[0] - np.shape(other.VirtualVarsPic)[0]
+
+        return 0
+
+    def __eq__ (self, other):
+        return self.p_cmp(other) is 0
+
+    def __ge__ (self, other):
+        return self.p_cmp(other) >= 0
+
+    def __gt__ (self, other):
+        return self.p_cmp(other) > 0
+
+    def __le__ (self, other):
+        return self.p_cmp(other) <= 0
+
+    def __lt__ (self, other):
+        return self.p_cmp(other) < 0
+
+#endregion
+
+#region GAP Rule
 class GAP_Rule:
-    part_header = ()
-    part_body = {}
-    rule_type = RuleType.UNKNOWN
+    """
+    it analyses and save all the data needed for a single gap rule.
+    """
 
-    def __init__ ( self, header, body ):
-        part_header = header
-        self.rule_type = RuleType.HEADER_RULE
+    def __init__ (self, rule:str):
+        headerBlock, bodyBlock, args = _Parse_Rule(rule)
+        self.Dictionary = _Create_ArgumentsDictionary(args)
+        self.Body, self.Atoms = [], []
+        self.Header = GAP_Block(headerBlock, self.Dictionary)
 
-        if len( body ) > 0:
-            self.rule_type = RuleType.GROUND_RULE
+        self.Atoms.append(headerBlock[0])
 
-            for block in body:
-                predicat, args, notation, type = block
-                if not type in self.part_body.keys( ):
-                    self.part_body [type] = []
+        for block in bodyBlock:
+            self.Body.append(GAP_Block(block, self.Dictionary))
+            if block[0] not in self.Atoms:
+                self.Atoms.append(block[0])
 
-                self.part_body [type].append( block )
+        self.Body.sort()
 
-                if type is BlockType.ABOVE_BLOCK:
-                    self.rule_type = RuleType.BASIC_RULE
+    def __str__ (self):
+        result = ""
 
+        result = result + self.Header.__str__() + " <- "
+        for i in range(0, len(self.Body) - 1):
+            result = result + self.Body[i].__str__()
+            if i + 1 < len(self.Body):
+                result += " & "
+
+        return result
+
+    def __repr__ (self):
+        return self.__str__()
+
+    # noinspection PyShadowingNames,PyPep8Naming
+    def Create_DefinitionZone (self, dictName:str = "MainDict", idx:int = 0, addon:int = 0) -> list:
+        """
+        create python rule in the "Definition Zone" paradigm
+        :param dictName: the name of the dictionary that holds all the data structure
+        :return: list of python commands
+        """
+        result = []
+        aboveLst = []
+
+        result = result + QueryTree_Create_Dictionaries(self.Atoms)
+
+        result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
+        for i in range(len(self.Body)):
+            block = self.Body[i]
+
+            if len(block.Matches) is 0:
+                result = result + QueryTree_Create_RuleArgs(block, i, addon + 1)
+            else:
+                result = result + QueryTree_Create_Filter(block, i, addon + 1)
+
+            if block.Type is BlockType.ABOVE:
+                aboveLst.append(i)
+
+        result = result + QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)[0]
+
+        if len(aboveLst) > 0:
+            result = result + QueryTree_Create_SelectAbove(aboveLst, self, dictName, addon = addon + 1)
+        else:
+            result.append(("def_zone = final_join", addon + 1))
+
+        return result
+
+    def Create_CompiledCode (self, total:int, dictName:str = "MainDict", idx:int = 0, addon:int = 0,
+                             eps:float = 0.00001) -> list:
+        result = []
+
+        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:", addon))
+        result.append(("added, changed = 0,0", addon + 1))
+
+        result.append(("for row in assigns:", addon + 1))
+
+        for i in range(total):
+            result.append(("a_{0} = row[varsPic[{0}]]".format(i), addon + 2))
+
+        for block in self.Body:
+            if block.Type == BlockType.ANNOTATION:
+                tupleKey = ""
+                for idx in block.VirtualVarsPic:
+                    tupleKey += "{0},".format(idx)
+
+                result.append(
+                    ("{0}={3}[\"{1}\"][({2})]".format(block.Notation, block.Predicat, tupleKey, dictName), addon + 2))
+
+        block = self.Header
+        tupleKey = ""
+        for idx in block.VirtualVarsPic:
+            tupleKey += "{0},".format(idx)
+
+        result.append((
+            "if ({0}) not in {1}[\"{2}\"].keys() and {3} > 0:".format(tupleKey, dictName, block.Predicat,
+                                                                      block.Notation), addon + 2))
+        result.append(("added+=1", addon + 3))
+        result.append(
+            ("{0}[\"{1}\"][({2})] = {3}".format(dictName, block.Predicat, tupleKey, block.Notation), addon + 3))
+
+        result.append((
+            "elif {0} >= {1}[\"{2}\"][({3})]+{4}:".format(block.Notation, dictName, block.Predicat, tupleKey, eps),
+            addon + 2))
+        result.append(("changed+=1", addon + 3))
+        result.append(
+            ("{0}[\"{1}\"][({2})] = {3}".format(dictName, block.Predicat, tupleKey, block.Notation), addon + 3))
+
+        result.append(("return added, changed", addon + 1))
+        return result
+
+#endregion
+
+#region GAP Compiler
 class GAP_Compiler:
-    rules = []
+    """
+    it loads a gap file (of more than 1) and compile the rules to python code
+    """
 
-    def __int__ ( self ):
-        rules = []
+    def __init__ (self, eps:float = 0.00001):
+        self.Rules = []
+        self.e = eps
 
-    def load ( self, path ):
-        lines = []
-        filer = open( path, "r" )
+    def Load (self, path):
+        """
+        load a single gap file into the compiler
+        :param path: Gap file path
+        :return: void
+        """
+        filer = open(path, "r")
 
-        for line in filer.readlines( ):
-            lines.append( line )
+        for line in filer.readlines():
+            rules = GAP_Rule(line)
+            self.Rules.append(rules)
 
-        result = parse( lines )
+#endregion
 
-        for rule in result:
-            self.rules.append( analyse_rule( rule ) )
+compiler = GAP_Compiler()
+compiler.Load("../External/Rules/Pi4m.gap")
 
+rule = compiler.Rules[0]
 
+result = rule.Create_DefinitionZone()
 
+for line in result:
+    text, tabsCount = line
+
+    command = ""
+    for i in range(tabsCount):
+        command += "\t"
+
+    command = command + text
+
+    print(command)
