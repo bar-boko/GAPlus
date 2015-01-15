@@ -168,6 +168,7 @@ def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
 
     for predicat in lst:
         result.append(("dict_{0}=MainDict[\"{0}\"]".format(predicat), addon))
+        result.append(("array_{0} = dataHold.Generate_NDArray(\"{0}\")".format(predicat), addon))
 
     return result
 
@@ -183,7 +184,7 @@ def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
     predicat, physic = block.Predicat, block.PhysicalVarsPic
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
-    result.append(("start_block_{0}=({1},start_block_varsPic_{0})".format(num, predicat), addon))
+    result.append(("start_block_{0}=(array_{1},start_block_varsPic_{0})".format(num, predicat), addon))
 
     return result
 
@@ -200,10 +201,10 @@ def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append((
-        "start_block_{0}=gpu.Filter(({1},start_block_varsPic_{0}), np.array({2},dtype=np.int)".format(num, predicat,
-                                                                                                      matches), addon))
-    result.append(("_size=np.shape(start_block_{0})[0]".format(num), addon))
-    result.append(("if _size is 0:", addon))
+        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), np.array({2},dtype=np.int)".format(num,
+            predicat, matches), addon))
+    result.append(("size=np.shape(start_block_{0})[0]".format(num), addon))
+    result.append(("if size is 0:", addon))
     result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
 
     return result
@@ -234,10 +235,10 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
 
             command = "{0}_{1}_{2}=gpu.Join({3}_{4},{3}_{5})".format(out_name, interval, count, in_name, a, b)
             result.append((command, addon))
-            command = "_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count)
+            command = "size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count)
             result.append((command, addon))
 
-            result.append(("if _size is 0:", addon))
+            result.append(("if size is 0:", addon))
             result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
             joinLst.append((interval, count))
             count += 1
@@ -259,8 +260,8 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
                     b[0], b[1])
                 result.append((command, addon))
 
-                result.append(("_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count), addon))
-                result.append(("if _size is 0:", addon))
+                result.append(("size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count), addon))
+                result.append(("if size is 0:", addon))
                 result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
 
                 temp.append((interval, count))
@@ -295,8 +296,8 @@ def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_
             rule.Body[ptr].VirtualVarsPic, dictName, rule.Body[ptr].Notation)
 
         result.append((command, addon))
-        result.append(("_size=np.shape(select_{0})".format(count), addon))
-        result.append(("if _size[0] is 0:", addon))
+        result.append(("size=np.shape(select_{0})".format(count), addon))
+        result.append(("if size[0] is 0:", addon))
         result.append(("return select_{0}".format(count), addon + 1))
 
     tmp = QueryTree_Create_Join(lst, "select", "select_join", addon = addon)
