@@ -13,6 +13,7 @@ comp = com.GAP_Compiler()
 
 prev, next = { }, { }
 intervals = 0
+MainDict = { }
 
 addedLst, changedLst = [], [] ## for predicats
 toDefZone, toRun = [], []     ## for rules
@@ -42,17 +43,21 @@ def Load_Rules (path:str):
     comp.Load(path)
 
 def PreRun ():
+    global MainDict
     dictList = ""
-    for predicat in comp.GetPredicats():
+    MainDict = dataHolder.data
+    predicats = comp.GetPredicats()
+    for predicat in predicats:
         next[predicat] = 1, 1
         dictList += "dict_{0} = MainDict[\"{0}\"]\n".format(predicat)
-    for i in range(comp.Rules):
+    for i in range(len(comp.Rules)):
         comp.Rules[i].Arrange_Execution(0, 0)
         def_zones.append((None, None))
 
     exec(compile(dictList, "<string>", "exec"))
 
 def Interval ():
+    global fix_point
     toDefZone.clear(), toRun.clear(), addedLst.clear(), changedLst.clear()
 
     for predicat in prev.keys():
@@ -98,7 +103,7 @@ def Interval ():
         next_add, next_change = next[comp.Rules[i].Header.Predicat]
         next[comp.Rules[i].Header.Predicat] = next_add + added, next_change + changed
 
-def Run (interval:int = 1):
+def Run ():
     if intervals is 0:
         PreRun()
 
@@ -114,18 +119,20 @@ def Run_FixPoint ():
 def Exit ():
     sys.exit()
 
+Load_Data("../External/Data/fb-net1.csv")
 Load_Rules("../External/Rules/Pi4i.gap")
+Run_FixPoint()
 
-sys.stdout.write("GAP+:> ")
-while True:
-    sys.stdout.write("GAP+:>")
-    command = sys.stdin.readline()
-    try:
-        exec(command)
-    except Exception as e:
-        print("## Exception :")
-        print(str(e))
-        print()
+#sys.stdout.write("GAP+:> ")
+#while True:
+#    sys.stdout.write("GAP+:>")
+#    command = sys.stdin.readline()
+#    try:
+#        exec(command)
+#    except Exception as e:
+#        print("## Exception :")
+#        print(str(e))
+#       print()
 
 #endregion
 

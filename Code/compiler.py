@@ -586,7 +586,7 @@ class GAP_Compiler:
         for rule in self.Rules:
             for atom in rule.Predicats:
                 if atom not in lst:
-                    lst.append(rule.Predicats)
+                    lst.append(atom)
 
         return lst
 
