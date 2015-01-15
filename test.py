@@ -10,5 +10,21 @@ data.Load("External/Data/fb-net3.csv")
 
 com = comp.GAP_Compiler()
 com.Load("External/Rules/Pi4i.gap")
+code = com.Compile()
+
+final_code = ""
+
+for line in code:
+    text, tabsCount = line
+
+    command = ""
+    for i in range(tabsCount):
+        command += "\t"
+
+    command += text
+    final_code += command + "\n"
+
+machine_code = compile(final_code, "<string>", "exec")
+exec(machine_code)
 test = 1
 

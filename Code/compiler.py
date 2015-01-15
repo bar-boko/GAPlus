@@ -31,11 +31,9 @@ class RuleType(Enum):
     presents the type of GAP rule
     """
     UNKNOWN = 0
-    ONCE_HEADER = 1
+    HEADER = 1
     GROUND = 2
-    HEADER = 3
-    BASIC = 4
-    COMPLEX = 5
+    COMPLEX = 3
 
 # endregion
 
@@ -139,6 +137,21 @@ def _Create_ArgumentsDictionary (lst):
 
     return result
 
+def _Create_CommandString (lst:list) -> str:
+    result = ""
+
+    for line in lst:
+        text, tabsCount = line
+
+        command = ""
+        for i in range(tabsCount):
+            command += "\t"
+
+        command += text
+        result += command + "\n"
+
+    return result
+
 # endregion
 
 # region Query Tree
@@ -155,7 +168,7 @@ def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
 
     for predicat in lst:
         #result.append((predicat + " = MainDict[\"" + predicat + "\"]", addon + 0))
-        result.append(("{0}=MainDict[\"{0}\"]".format(predicat), addon))
+        result.append(("dict_{0}=MainDict[\"{0}\"]".format(predicat), addon))
 
     return result
 
@@ -173,7 +186,7 @@ def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
     #result.append(("start_block_valsPic_" + str(num) + "=np.array(" + str(physic) + ", dtype=np.int32))", addon))
     #result.append(("start_block_" + str(num) + " = (" + predicat + ", start_block_valsPic_" + str(num) + ")", addon))
 
-    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic), addon))
+    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append(("start_block_{0}=({1},start_block_varsPic_{0})".format(num, predicat), addon))
 
     return result
@@ -197,7 +210,7 @@ def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
     #result.append(("if _size == 0:", addon))
     #result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
 
-    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic), addon))
+    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append((
         "start_block_{0}=gpu.Filter(({1},start_block_varsPic_{0}), np.array({2},dtype=np.int)".format(num, predicat,
                                                                                                       matches), addon))
@@ -303,11 +316,10 @@ def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_
     for ptr in lst:
         #command = "select_" + str(count) + " = gpu.SelectAbove_Full(final_" + in_name + ", " + str(
         #    rule.Body[ptr].VirtualVarsPic)
-        command = "select_{0}=gpu.SelectAbove_Full(final_{1},{2}, MainDict[\"{3}\"],{4})".format(count, in_name,
-                                                                                                 rule.Body[
-                                                                                                     ptr].VirtualVarsPic,
-                                                                                                 dictName, rule.Body[
-                                                                                                     ptr].Notation)
+        command = "select_{0}=gpu.SelectAbove_Full(final_{1},{2},dict_{3},{4})".format(count, in_name,
+                                                                                       rule.Body[ptr].VirtualVarsPic,
+                                                                                       dictName,
+                                                                                       rule.Body[ptr].Notation)
 
         #command += ", MainDict[\"" + dictName + "\"], " + str(float(rule.Body[ptr].Notation)) + ")"
 
@@ -416,11 +428,21 @@ class GAP_Rule:
         self.Dictionary = _Create_ArgumentsDictionary(args)
         self.Body, self.Atoms = [], []
         self.Header = GAP_Block(headerBlock, self.Dictionary)
+        self.Type = RuleType.HEADER
+
+        self.Code_DefinitionZone, self.Code_Run, self_Predicats_Dependent = [], [], []
 
         self.Atoms.append(headerBlock[0])
 
         for block in bodyBlock:
-            self.Body.append(GAP_Block(block, self.Dictionary))
+            parsed_block = GAP_Block(block, self.Dictionary)
+
+            if parsed_block.Type == BlockType.ANNOTATION and self.Type == RuleType.HEADER:
+                self.Type = RuleType.GROUND
+            elif parsed_block.Type == BlockType.ABOVE:
+                self.Type = RuleType.COMPLEX
+
+            self.Body.append(parsed_block)
             if block[0] not in self.Atoms:
                 self.Atoms.append(block[0])
 
@@ -440,7 +462,19 @@ class GAP_Rule:
     def __repr__ (self):
         return self.__str__()
 
-    # noinspection PyShadowingNames,PyPep8Naming
+    def Create_DefinitionZone_HeaderRule (self, idx:int = 0, addon:int = 0) -> list:
+        result = []
+
+        result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
+
+        if len(self.Header.Matches) is 0:
+            result += QueryTree_Create_RuleArgs(self.Header, 0, addon + 1)
+        else:
+            result += QueryTree_Create_Filter(self.Header, 0, addon + 1)
+
+        result.append(("return start_block_0", addon + 1))
+        return result
+
     def Create_DefinitionZone (self, dictName:str = "MainDict", idx:int = 0, addon:int = 0) -> list:
         """
         create python rule in the "Definition Zone" paradigm
@@ -450,34 +484,31 @@ class GAP_Rule:
         result = []
         aboveLst = []
 
-        result = result + QueryTree_Create_Dictionaries(self.Atoms)
-
         result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
         for i in range(len(self.Body)):
             block = self.Body[i]
 
             if len(block.Matches) is 0:
-                result = result + QueryTree_Create_RuleArgs(block, i, addon + 1)
+                result += QueryTree_Create_RuleArgs(block, i, addon + 1)
             else:
-                result = result + QueryTree_Create_Filter(block, i, addon + 1)
+                result += QueryTree_Create_Filter(block, i, addon + 1)
 
             if block.Type is BlockType.ABOVE:
                 aboveLst.append(i)
 
-        result = result + QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)[0]
+        result += QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)[0]
 
         if len(aboveLst) > 0:
-            result = result + QueryTree_Create_SelectAbove(aboveLst, self, dictName, addon = addon + 1)
+            result += QueryTree_Create_SelectAbove(aboveLst, self, dictName, addon = addon + 1)
         else:
             result.append(("def_zone = final_join", addon + 1))
 
         return result
 
-    def Create_CompiledCode (self, total:int, dictName:str = "MainDict", idx:int = 0, addon:int = 0,
-                             eps:float = 0.00001) -> list:
+    def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:", addon))
+        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:".format(idx), addon))
         result.append(("added, changed = 0,0", addon + 1))
 
         result.append(("for row in assigns:", addon + 1))
@@ -489,32 +520,68 @@ class GAP_Rule:
             if block.Type == BlockType.ANNOTATION:
                 tupleKey = ""
                 for idx in block.VirtualVarsPic:
-                    tupleKey += "{0},".format(idx)
+                    tupleKey += "a_{0},".format(idx)
 
-                result.append(
-                    ("{0}={3}[\"{1}\"][({2})]".format(block.Notation, block.Predicat, tupleKey, dictName), addon + 2))
+                result.append(("{0}=dict_{1}[({2})]".format(block.Notation, block.Predicat, tupleKey), addon + 2))
 
         block = self.Header
         tupleKey = ""
         for idx in block.VirtualVarsPic:
-            tupleKey += "{0},".format(idx)
+            tupleKey += "a_{0},".format(idx)
 
         result.append((
-            "if ({0}) not in {1}[\"{2}\"].keys() and {3} > 0:".format(tupleKey, dictName, block.Predicat,
+            "if ({0}) not in dict_{1}.keys() and {2} > 0:".format(tupleKey, block.Predicat,
                                                                       block.Notation), addon + 2))
         result.append(("added+=1", addon + 3))
-        result.append(
-            ("{0}[\"{1}\"][({2})] = {3}".format(dictName, block.Predicat, tupleKey, block.Notation), addon + 3))
+        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append((
-            "elif {0} >= {1}[\"{2}\"][({3})]+{4}:".format(block.Notation, dictName, block.Predicat, tupleKey, eps),
+            "elif {0} >= dict_{1}[({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps),
             addon + 2))
         result.append(("changed+=1", addon + 3))
-        result.append(
-            ("{0}[\"{1}\"][({2})] = {3}".format(dictName, block.Predicat, tupleKey, block.Notation), addon + 3))
+        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return added, changed", addon + 1))
         return result
+
+    def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
+        result = []
+
+        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:".format(idx), addon))
+        result.append(("changed = 0", addon + 1))
+
+        result.append(("for row in assigns:", addon + 1))
+
+        for i in range(total):
+            result.append(("a_{0} = row[varsPic[{0}]]".format(i), addon + 2))
+
+        block = self.Header
+        tupleKey = ""
+        for idx in block.VirtualVarsPic:
+            tupleKey += "a_{0},".format(idx)
+
+        result.append((
+            "if {0} >= dict_{1}[({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps), addon + 2))
+        result.append(("changed+=1", addon + 3))
+        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
+
+        result.append(("return 0, changed", addon + 1))
+        return result
+
+    def Arrange_Execution (self, idx:int, addon:int = 0):
+        if self.Type == RuleType.HEADER:
+            self.Code_DefinitionZone = compile(
+                _Create_CommandString(self.Create_DefinitionZone_HeaderRule(idx = idx, addon = addon)), "<string>",
+                "exec")
+            self.Code_Run = compile(_Create_CommandString(
+                self.Create_CompiledCode_HeaderRule(len(self.Dictionary), idx = idx, addon = addon)), "<string>",
+                                    "exec")
+        else:
+            self.Code_DefinitionZone = compile(
+                _Create_CommandString(self.Create_DefinitionZone(idx = idx, addon = addon)), "<string>", "exec")
+            self.Code_Run = compile(
+                _Create_CommandString(self.Create_CompiledCode(len(self.Dictionary), idx = idx, addon = addon)),
+                "<string>", "exec")
 
 #endregion
 
@@ -537,13 +604,41 @@ class GAP_Compiler:
         filer = open(path, "r")
 
         for line in filer.readlines():
-            rules = GAP_Rule(line)
-            self.Rules.append(rules)
+            rule = GAP_Rule(line)
+            self.Rules.append(rule)
+
+    def GetAtoms (self) -> list:
+        lst = []
+
+        for rule in self.Rules:
+            for atom in rule.Atoms:
+                if atom not in lst:
+                    lst.append(atom)
+
+        return lst
+
+    def Compile (self, dictName:str = "MainDict", addon:int = 0) -> list:
+        result = []
+
+        result += QueryTree_Create_Dictionaries(self.GetAtoms(), addon)
+
+        for i in range(len(self.Rules)):
+            rule = self.Rules[i]
+
+            if rule.Type == RuleType.HEADER:
+                result += rule.Create_DefinitionZone_HeaderRule(idx = i, addon = addon)
+                result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
+            else:
+                result += rule.Create_DefinitionZone(idx = i, addon = addon)
+                result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
+
+        return result
 
 #endregion
 
+''''
 compiler = GAP_Compiler()
-compiler.Load("../External/Rules/Pi4m.gap")
+compiler.Load("External/Rules/Pi4m.gap")
 
 rule = compiler.Rules[0]
 
@@ -559,3 +654,4 @@ for line in result:
     command = command + text
 
     print(command)
+'''''
