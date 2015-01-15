@@ -482,6 +482,7 @@ class GAP_Rule:
         :return: list of python commands
         """
         result = []
+
         aboveLst = []
 
         result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
