@@ -10,16 +10,16 @@ __author__ = "Bar Bokovza"
 
 # noinspection PyPep8
 
-# region IMPORTS
+#region IMPORTS
 from enum import Enum
 
 import numpy as np
 
 import Code.validation as valid
 
-# endregion
+#endregion
 
-# region ENUMS
+#region ENUMS
 class BlockType(Enum):
     """ Presents the type of block from shape atom(args):notation """
     UNKNOWN = 0
@@ -35,9 +35,9 @@ class RuleType(Enum):
     GROUND = 2
     COMPLEX = 3
 
-# endregion
+#endregion
 
-# region p_ Functions
+#region p_ Functions
 
 def _Parse_Block (block) -> (str, list, str, BlockType):
     """
@@ -152,9 +152,9 @@ def _Create_CommandString (lst:list) -> str:
 
     return result
 
-# endregion
+#endregion
 
-# region Query Tree
+#region Query Tree
 # The number presents the amount of tabs before
 
 def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
@@ -167,7 +167,6 @@ def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
     result = []
 
     for predicat in lst:
-        #result.append((predicat + " = MainDict[\"" + predicat + "\"]", addon + 0))
         result.append(("dict_{0}=MainDict[\"{0}\"]".format(predicat), addon))
 
     return result
@@ -182,9 +181,6 @@ def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
     """
     result = []
     predicat, physic = block.Predicat, block.PhysicalVarsPic
-
-    #result.append(("start_block_valsPic_" + str(num) + "=np.array(" + str(physic) + ", dtype=np.int32))", addon))
-    #result.append(("start_block_" + str(num) + " = (" + predicat + ", start_block_valsPic_" + str(num) + ")", addon))
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append(("start_block_{0}=({1},start_block_varsPic_{0})".format(num, predicat), addon))
@@ -201,14 +197,6 @@ def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
     """
     result = []
     predicat, physic, matches = block.Predicat, block.PhysicalVarsPic, block.Matches
-
-    #result.append(("start_block_valsPic_" + str(num) + "=np.array(" + str(physic) + ", dtype=np.int32))", addon))
-    #result.append((
-    #    "start_block_" + str(num) + " = gpu.Filter((" + predicat + ", start_block_valsPic_" + str(
-    #        num) + "),np.array(" + str(matches) + ", dtype=np.int32))", addon))
-    #result.append(("_size = np.shape(start_block_" + str(num) + ")[0]", addon))
-    #result.append(("if _size == 0:", addon))
-    #result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append((
@@ -243,19 +231,17 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
         a = lst.pop(0)
         if len(lst) > 0:
             b = lst.pop(0)
-            #command = out_name + "_" + str(interval) + "_" + str(count) + "=gpu.Join(" + in_name + "_" + str(a)
+
             command = "{0}_{1}_{2}=gpu.Join({3}_{4},{3}_{5})".format(out_name, interval, count, in_name, a, b)
             result.append((command, addon))
             command = "_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count)
             result.append((command, addon))
-            #result.append(("_size = np.shape((" + out_name + "_" + str(interval) + "_" + str(count) + ")[0])", addon))
+
             result.append(("if _size is 0:", addon))
             result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
-            #result.append(("return " + out_name + "_" + str(interval) + "_" + str(count), addon + 1))
             joinLst.append((interval, count))
             count += 1
         else:
-            #result.append((out_name + "_" + str(interval) + "_" + str(count) + "=" + in_name + "_" + str(a), addon))
             result.append(("{0}_{1}_{2}={3}_{4}".format(out_name, interval, count, in_name, a), addon))
             joinLst.append((interval, count))
 
@@ -268,32 +254,23 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
             a = joinLst.pop(0)
             if len(joinLst) > 0:
                 b = joinLst.pop(0)
-                #command = out_name + "_" + str(interval) + "_" + str(count) + "=gpu.Join(" + out_name + "_" + str(
-                #    a[0]) + "_" + str(a[1])
+
                 command = "{0}_{1}_{2}=gpu.Join({0}_{3}_{4},{0},{5},{6})".format(out_name, interval, count, a[0], a[1],
-                                                                                 b[0], b[1])
-                #command += "," + out_name + "_" + str(b[0]) + "_" + str(b[1]) + ")"
+                    b[0], b[1])
                 result.append((command, addon))
 
-                #result.append(
-                #    ("_size = np.shape((" + out_name + "_" + str(interval) + "_" + str(count) + ")[0])", addon))
                 result.append(("_size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count), addon))
                 result.append(("if _size is 0:", addon))
-                #result.append(("return " + out_name + "_" + str(interval) + "_" + str(count), addon + 1))
                 result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
 
                 temp.append((interval, count))
                 count += 1
             else:
-                #result.append((
-                #    out_name + "_" + str(interval) + "_" + str(count) + "=" + out_name + "_" + str(a[0]) + "_" + str(
-                #        a[1]), addon))
                 result.append(("{0}_{1}_{2}={0}_{3}_{4}".format(out_name, interval, count, a[0], a[1]), addon))
                 temp.append((interval, count))
 
         joinLst = temp
 
-    #result.append(("final_" + out_name + " = " + out_name + "_" + str(joinLst[0][0]) + "_" + str(joinLst[0][1]), addon))
     result.append(("final_{0}={0}_{1}_{2}".format(out_name, joinLst[0][0], joinLst[0][1]), addon))
 
     return result, joinLst[0]
@@ -314,27 +291,18 @@ def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_
     count = 0
 
     for ptr in lst:
-        #command = "select_" + str(count) + " = gpu.SelectAbove_Full(final_" + in_name + ", " + str(
-        #    rule.Body[ptr].VirtualVarsPic)
         command = "select_{0}=gpu.SelectAbove_Full(final_{1},{2},dict_{3},{4})".format(count, in_name,
-                                                                                       rule.Body[ptr].VirtualVarsPic,
-                                                                                       dictName,
-                                                                                       rule.Body[ptr].Notation)
-
-        #command += ", MainDict[\"" + dictName + "\"], " + str(float(rule.Body[ptr].Notation)) + ")"
+            rule.Body[ptr].VirtualVarsPic, dictName, rule.Body[ptr].Notation)
 
         result.append((command, addon))
-        #result.append(("_size = np.shape(select_" + str(count) + ")", addon))
         result.append(("_size=np.shape(select_{0})".format(count), addon))
         result.append(("if _size[0] is 0:", addon))
         result.append(("return select_{0}".format(count), addon + 1))
-        #result.append(("return select_" + str(count), addon + 1))
 
     tmp = QueryTree_Create_Join(lst, "select", "select_join", addon = addon)
     joinLst, target = tmp
     result = result + joinLst
 
-    #command = "def_zone = gpu.Join(final_select_join, final_join)"
     result.append(("return gpu.Join(final_select_join, final_join)", addon))
 
     return result
@@ -426,13 +394,13 @@ class GAP_Rule:
     def __init__ (self, rule:str):
         headerBlock, bodyBlock, args = _Parse_Rule(rule)
         self.Dictionary = _Create_ArgumentsDictionary(args)
-        self.Body, self.Atoms = [], []
+        self.Body, self.Predicats = [], []
         self.Header = GAP_Block(headerBlock, self.Dictionary)
         self.Type = RuleType.HEADER
 
-        self.Code_DefinitionZone, self.Code_Run, self_Predicats_Dependent = [], [], []
+        self.Code_DefinitionZone, self.Code_Run, self.Predicats_Dependent = [], [], []
 
-        self.Atoms.append(headerBlock[0])
+        self.Predicats.append(headerBlock[0])
 
         for block in bodyBlock:
             parsed_block = GAP_Block(block, self.Dictionary)
@@ -443,10 +411,14 @@ class GAP_Rule:
                 self.Type = RuleType.COMPLEX
 
             self.Body.append(parsed_block)
-            if block[0] not in self.Atoms:
-                self.Atoms.append(block[0])
+            if block[0] not in self.Predicats:
+                self.Predicats.append(block[0])
+                self.Predicats_Dependent.append(block[0])
 
         self.Body.sort()
+
+        if self.Type == RuleType.HEADER:
+            self.Predicats_Dependent = [headerBlock[0]]
 
     def __str__ (self):
         result = ""
@@ -608,20 +580,20 @@ class GAP_Compiler:
             rule = GAP_Rule(line)
             self.Rules.append(rule)
 
-    def GetAtoms (self) -> list:
+    def GetPredicats (self) -> list:
         lst = []
 
         for rule in self.Rules:
-            for atom in rule.Atoms:
+            for atom in rule.Predicats:
                 if atom not in lst:
-                    lst.append(atom)
+                    lst.append(rule.Predicats)
 
         return lst
 
     def Compile (self, dictName:str = "MainDict", addon:int = 0) -> list:
         result = []
 
-        result += QueryTree_Create_Dictionaries(self.GetAtoms(), addon)
+        result += QueryTree_Create_Dictionaries(self.GetPredicats(), addon)
 
         for i in range(len(self.Rules)):
             rule = self.Rules[i]
