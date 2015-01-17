@@ -82,7 +82,7 @@ void COMPLEX_JOIN(__global const int* a, int a_col, __global const int* a_values
             return;
     }
     
-    //EXECUTE_JOIN(a, a_col, a_row, a_valuesPic, b, b_col, b_row, b_valuesPic, join_valuesPic, current, maxVars, buffer, x, y);
+    EXECUTE_JOIN(a, a_col, a_valuesPic, b, b_col, b_valuesPic, join_valuesPic, current, maxVars, buffer, x, y);
 }
 
 /// this function return all the rows from a table that have same value for 2 variables
@@ -101,8 +101,6 @@ void SIMPLE_FILTER(__global const int* a, __global const float* a_vals, int a_co
         int i;
         for(i=0; i<a_col; i++)
             buffer[curr*a_col + i] = a[i];
-            
-        
     }
 }
 
@@ -134,16 +132,15 @@ void FILTER(__global int* a, const int a_col, __global int* places, const int pl
 
 /// This function return all the rows from the table that have value >= minVal
 __kernel
-void SELECT_ABOVE(__global const int* args, __global const int* values, int a_col, int minVal,
-                  __global int* buffer_args, __global int* buffer_values, __global int* current)
+void SELECT_ABOVE(__global const int* args, __global const float* values, int a_col, int minVal,
+                  __global int* buffer_args, __global int* current)
 {
     int x = get_global_id(0);
     
     if(values[x] >= minVal)
     {
         int curr = atom_add(current, 1);
-        buffer_values[curr] = values[x];
-        
+
         int i;
         for(int i=0; i < a_col; i++)
             buffer_args[curr*a_col+i] = args[x*a_col+i];

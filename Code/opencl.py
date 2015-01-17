@@ -20,10 +20,11 @@ def Create_VarsPic_Join (a:np.ndarray, b:np.ndarray) -> np.ndarray:
         return zero, zero
 
     result = np.zeros(a_row, dtype = np.int32)
+    result.fill(-1)
     count = 0
     joinLst = []
 
-    for i in range(0, a_row - 1):
+    for i in range(a_row):
         a_val, b_val = a[i], b[i]
         if a_val == -1 and b_val == -1:
             result[i] = -1
@@ -31,8 +32,8 @@ def Create_VarsPic_Join (a:np.ndarray, b:np.ndarray) -> np.ndarray:
             result[i] = count
             count = count + 1
 
-            if a_val != -1 and b_val != -1:
-                joinLst.append(i)
+        if a_val != -1 and b_val != -1:
+            joinLst.append(i)
 
     return result, np.array(joinLst, dtype = np.int32)
 
@@ -60,7 +61,7 @@ def Create_VarsPic_Physical (lst:list, size:int) -> np.ndarray:
     count = 0
 
     for ptr in lst:
-        if result[ptr] != -1:
+        if result[ptr] == -1:
             result[ptr] = count
             count = count + 1
 
@@ -173,41 +174,37 @@ class GAP_OpenCL:
         return result, join_valsPic
 
     def SelectAbove (self, data:tuple, minValue:float) -> tuple:  # (idx, values)
-        a_idx, a_varsPic = data
-        a_row, a_col = a_idx
+        a_idx, a_values = data
+        a_row, a_col = np.shape(a_idx)
 
-        result_idx, result_vals = np.zeros(np.shape(a_idx), dtype = np.int32), np.zeros(np.shape(a_varsPic),
-                                                                                        dtype = np.int32)
+        result_idx = np.zeros(np.shape(a_idx), dtype = np.int32)
+
         current = np.zeros(1, dtype = np.int32)
 
         buffer_idx = self.context.create_buffer(self.flag_read, a_idx)
-        buffer_vals = self.context.create_buffer(self.flag_read, a_varsPic)
+        buffer_values = self.context.create_buffer(self.flag_read, a_values)
 
         buffer_result_idx = self.context.create_buffer(self.flag_write, result_idx)
-        buffer_result_vals = self.context.create_buffer(self.flag_write, result_vals)
 
         buffer_current = self.context.create_buffer(self.flag_both, current)
 
         kernel = self.program.get_kernel("SELECT_ABOVE")
 
         kernel.set_arg(0, buffer_idx)
-        kernel.set_arg(1, buffer_vals)
+        kernel.set_arg(1, buffer_values)
         Set_Argument(kernel, 2, a_col, np.int32)
         Set_Argument(kernel, 3, minValue, np.int32)
 
-        kernel.set_arg(4, buffer_current)
-        kernel.set_arg(5, buffer_result_idx)
-        kernel.set_arg(6, buffer_result_vals)
+        kernel.set_arg(4, buffer_result_idx)
+        kernel.set_arg(5, buffer_current)
 
         self.queue.execute_kernel(kernel, [a_row], None)
         self.queue.read_buffer(buffer_current, current)
         self.queue.read_buffer(buffer_result_idx, result_idx)
-        self.queue.read_buffer(buffer_result_vals, result_vals)
 
         result_idx = np.resize(result_idx, (current[0], a_col))
-        result_vals = np.resize(result_vals, current[0])
 
-        return result_idx, result_vals
+        return result_idx
 
     def Filter (self, a:tuple, matches:list) -> np.ndarray:
         a_idx, a_varsPic = a
@@ -217,11 +214,11 @@ class GAP_OpenCL:
 
         a_array = np.resize(a_idx, a_row * a_col)
 
-        #matches_array = np.array(matches, dtype = np.int32)
+        matches_array = np.array(matches, dtype = np.int32)
         #matches_array = np.resize(np.array(matches, dtype = np.int32), 2*len(matches))
 
         result_idx = np.zeros(a_row * varsPic_size, dtype = np.int32)
-        #current = np.zeros(1, dtype = np.int32)
+        current = np.zeros(1, dtype = np.int32)
 
         """
         buffer_a = self.context.create_buffer(self.flag_read, a_array)
@@ -271,9 +268,8 @@ class GAP_OpenCL:
                 if a_varsPic[i] is not -1:
                     result_idx[curr][a_varsPic[i]] = a_idx[x][a_varsPic[i]]
 
-
-        #result_idx = np.resize(result_idx, (current[0], a_col))
-        result_idx = np.resize(result_idx, (count, varsPic_size))
+        result_idx = np.resize(result_idx, (current[0], a_col))
+        #result_idx = np.resize(result_idx, (count, varsPic_size))
         return result_idx, a_varsPic
 
     def Projection (self, data:np.ndarray, projectionLst:list) -> np.ndarray:
@@ -304,14 +300,14 @@ class GAP_OpenCL:
 
         for item in array:
             tup = tuple(item)
-            if not item in dist.keys():
+            if not tup in dist.keys():
                 dist[tup] = dictionary[tup]
 
         if len(dist) == 0:
             return None, None
 
-        idx = np.array(dist.keys(), dtype = np.int)
-        values = np.array(dist.values(), dtype = np.int)
+        idx = np.array(list(dist.keys()), dtype = np.int32)
+        values = np.array(list(dist.values()), dtype = np.float)
 
         return idx, values
 
@@ -340,11 +336,11 @@ class GAP_OpenCL:
 
         projection_array = self.Projection(a_array, physical_places)
         distinct_array = self.Distinct(projection_array, data)
-        select_idx, select_vars = self.SelectAbove(distinct_array, minValue)
+        select_idx = self.SelectAbove(distinct_array, minValue)
 
         if toJoin:
             return self.Join(a, (select_idx, places_valsPic))
-        return select_idx, select_vars
+        return select_idx, places_valsPic
 
 #endregion
 

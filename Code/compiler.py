@@ -16,6 +16,8 @@ from enum import Enum
 import numpy as np
 
 import Code.validation as valid
+from Code.dataHolder import GAP_Data
+from Code.opencl import GAP_OpenCL
 
 #endregion
 
@@ -38,6 +40,9 @@ class RuleType(Enum):
 #endregion
 
 #region p_ Functions
+
+def _IsEmpty (array:np.ndarray) -> bool:
+    return np.shape(array)[0] is 0
 
 def _Parse_Block (block) -> (str, list, str, BlockType):
     """
@@ -184,7 +189,11 @@ def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
     predicat, physic = block.Predicat, block.PhysicalVarsPic
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
+
     result.append(("start_block_{0}=(array_{1},start_block_varsPic_{0})".format(num, predicat), addon))
+    result.append(("size=np.shape(start_block_{0}[0])[0]".format(num), addon))
+    result.append(("if size is 0:", addon))
+    result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
 
     return result
 
@@ -201,7 +210,7 @@ def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append((
-        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), np.array({2},dtype=np.int))".format(num,
+        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), {2})".format(num,
             predicat, matches), addon))
     result.append(("size=np.shape(start_block_{0}[0])[0]".format(num), addon))
     result.append(("if size is 0:", addon))
@@ -448,7 +457,7 @@ class GAP_Rule:
         result.append(("return start_block_0", addon + 1))
         return result
 
-    def Create_DefinitionZone (self, dictName:str = "MainDict", idx:int = 0, addon:int = 0) -> list:
+    def Create_DefinitionZone_Compiled (self, dictName:str = "MainDict", idx:int = 0, addon:int = 0) -> list:
         """
         create python rule in the "Definition Zone" paradigm
         :param dictName: the name of the dictionary that holds all the data structure
@@ -545,18 +554,76 @@ class GAP_Rule:
 
     def Arrange_Execution (self, idx:int, addon:int = 0):
         if self.Type == RuleType.HEADER:
-            self.Code_DefinitionZone = compile(
-                _Create_CommandString(self.Create_DefinitionZone_HeaderRule(idx = idx, addon = addon)), "<string>",
-                "exec")
             self.Code_Run = compile(_Create_CommandString(
                 self.Create_CompiledCode_HeaderRule(len(self.Dictionary), idx = idx, addon = addon)), "<string>",
                                     "exec")
         else:
-            self.Code_DefinitionZone = compile(
-                _Create_CommandString(self.Create_DefinitionZone(idx = idx, addon = addon)), "<string>", "exec")
             self.Code_Run = compile(
                 _Create_CommandString(self.Create_CompiledCode(len(self.Dictionary), idx = idx, addon = addon)),
                 "<string>", "exec")
+
+    def Create_DefinitionZone_Join (self, arrays:list, gpu:GAP_OpenCL):
+        next = []
+
+        while len(arrays) > 1:
+            while len(arrays) > 0:
+                if len(arrays) is 1:
+                    next.append(arrays.pop(0))
+                else:
+                    a = arrays.pop(0)
+                    b = arrays.pop(0)
+
+                    res = gpu.Join(a, b)
+                    if _IsEmpty(res[0]):
+                        return res
+
+                    next.append(res)
+
+            arrays = next
+            next = []
+
+        return arrays
+
+    def Create_DefinitionZone (self, dataHolder:GAP_Data, gpu:GAP_OpenCL) -> tuple:
+        lst = list(range(len(self.Body)))
+
+        arrays = []
+        aboveLst = []
+
+        for i in lst:
+            block = self.Body[i]
+
+            if (len(block.Matches) > 0):
+                array = gpu.Filter((dataHolder.Generate_NDArray(block.Predicat), block.PhysicalVarsPic), block.Matches)
+            else:
+                array = (dataHolder.Generate_NDArray(block.Predicat), block.PhysicalVarsPic)
+
+            if _IsEmpty(array[0]):
+                return array
+            arrays.append(array)
+
+            if block.Type is BlockType.ABOVE:
+                aboveLst.append(i)
+
+        arrays = self.Create_DefinitionZone_Join(arrays, gpu)
+
+        if len(aboveLst) > 0:
+            for i in aboveLst:
+                block = self.Body[i]
+
+                # self, a:tuple, virtual_places:list, data:dict, minValue:float
+
+                after = gpu.SelectAbove_Full(arrays[0], block.VirtualVarsPic, dataHolder.GetData(block.Predicat),
+                    float(block.Notation))
+
+                if _IsEmpty(after[0]):
+                    return after
+
+                arrays.append(after)
+
+            arrays = self.Create_DefinitionZone_Join(arrays, gpu)
+
+        return arrays[0]
 
 #endregion
 
@@ -601,10 +668,10 @@ class GAP_Compiler:
             rule = self.Rules[i]
 
             if rule.Type == RuleType.HEADER:
-                result += rule.Create_DefinitionZone_HeaderRule(idx = i, addon = addon)
+                #result += rule.Create_DefinitionZone_HeaderRule(idx = i, addon = addon)
                 result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
             else:
-                result += rule.Create_DefinitionZone(idx = i, addon = addon)
+                #result += rule.Create_DefinitionZone(idx = i, addon = addon)
                 result += rule.Create_CompiledCode(len(rule.Dictionary), idx = i, addon = addon)
 
         return result

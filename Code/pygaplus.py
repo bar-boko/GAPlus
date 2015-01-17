@@ -16,7 +16,7 @@ prev, next = { }, { }
 intervals = 0
 MainDict = { }
 
-gpu = cl.GAP_OpenCL()
+gpu = cl.GAP_OpenCL("../External/OpenCL/Commands.cl")
 
 addedLst, changedLst = [], [] ## for predicats
 toDefZone, toRun = [], []     ## for rules
