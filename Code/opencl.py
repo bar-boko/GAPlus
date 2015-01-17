@@ -40,7 +40,7 @@ def Length_VarsPic (varsPic:np.ndarray) -> int:
     size = 0
 
     for item in varsPic:
-        if item in -1:
+        if item is not -1:
             size = size + 1
 
     return size
@@ -70,7 +70,7 @@ def Create_VarsPic_Physical (lst:list, size:int) -> np.ndarray:
 
 #region GAP OpenCL
 class GAP_OpenCL:
-    def __init__ (self, path:str = "../External/OpenCL/Commands.cl"):
+    def __init__ (self, path:str = "External/OpenCL/Commands.cl"):
         platforms = cl.Platforms()
         self.platform = platforms.platforms[0]
 
@@ -120,13 +120,13 @@ class GAP_OpenCL:
         a_idx, a_valsPic = a
         b_idx, b_valsPic = b
 
-        a_row, a_col = np.shape(a)
-        b_row, b_col = np.shape(b)
+        a_row, a_col = np.shape(a_idx)
+        b_row, b_col = np.shape(b_idx)
 
         join_valsPic, joinLst = Create_VarsPic_Join(a_valsPic, b_valsPic)
-        lst_row = np.shape(joinLst)
+        lst_row = np.shape(joinLst)[0]
 
-        if lst_row == 0:
+        if len(joinLst) is 0:
             return self.Cartesian(a_idx, b_idx), join_valsPic
 
         result = np.zeros((a_row * b_row, a_col + b_col - lst_row), dtype = np.int32)
@@ -161,13 +161,13 @@ class GAP_OpenCL:
         kernel.set_arg(5, buffer_b_pic)
 
         kernel.set_arg(6, buffer_join_pic)
-        Set_Argument(kernel, 7, np.shape(a_valsPic), np.int32)
-        kernel.set_arg(8, buffer_current)
+        Set_Argument(kernel, 8, np.shape(a_valsPic)[0], np.int32)
+        kernel.set_arg(7, buffer_current)
         kernel.set_arg(9, buffer_result)
 
         self.queue.execute_kernel(kernel, (a_row, b_row), None)
         self.queue.read_buffer(buffer_result, result)
-        self.queue.read_buffer(buffer_current, result)
+        self.queue.read_buffer(buffer_current, current)
 
         result = np.resize(result, (current[0], a_col + b_col - lst_row))
         return result, join_valsPic
@@ -210,43 +210,71 @@ class GAP_OpenCL:
         return result_idx, result_vals
 
     def Filter (self, a:tuple, matches:list) -> np.ndarray:
-        a_idx, a_valsPic = a
+        a_idx, a_varsPic = a
         a_row, a_col = np.shape(a_idx)
-        valsPic_row = np.shape(a_valsPic)
-        valsPic_size = Length_VarsPic(a_valsPic)
+        varsPic_row = np.shape(a_varsPic)[0]
+        varsPic_size = Length_VarsPic(a_varsPic)
 
-        matches_array = np.array(matches, dtype = np.int32)
+        a_array = np.resize(a_idx, a_row * a_col)
 
-        result_idx = np.zeros((a_row, valsPic_size), dtype = np.int32)
-        current = np.zeros(1, dtype = np.int32)
+        #matches_array = np.array(matches, dtype = np.int32)
+        #matches_array = np.resize(np.array(matches, dtype = np.int32), 2*len(matches))
 
-        buffer_a = self.context.create_buffer(self.flag_read, a_idx)
+        result_idx = np.zeros(a_row * varsPic_size, dtype = np.int32)
+        #current = np.zeros(1, dtype = np.int32)
+
+        """
+        buffer_a = self.context.create_buffer(self.flag_read, a_array)
         buffer_places = self.context.create_buffer(self.flag_read, matches_array)
-        buffer_valsPic = self.context.create_buffer(self.flag_read, a_valsPic)
+        buffer_varsPic = self.context.create_buffer(self.flag_read, a_varsPic)
 
         buffer_result = self.context.create_buffer(self.flag_write, result_idx)
         buffer_current = self.context.create_buffer(self.flag_both, current)
 
-        kernel = self.program.get_kernel("FILTER2")
+        kernel = self.program.get_kernel("FILTER")
 
         kernel.set_arg(0, buffer_a)
         Set_Argument(kernel, 1, a_row, np.int32)
 
         kernel.set_arg(2, buffer_places)
         Set_Argument(kernel, 3, len(matches), np.int32)
-        kernel.set_arg(4, buffer_valsPic)
-        Set_Argument(kernel, 5, valsPic_row, np.int32)
+        kernel.set_arg(4, buffer_varsPic)
+        Set_Argument(kernel, 5, varsPic_row, np.int32)
 
         kernel.set_arg(6, buffer_current)
         kernel.set_arg(7, buffer_result)
-        Set_Argument(kernel, 8, valsPic_size)
+        Set_Argument(kernel, 8, varsPic_size)
 
         self.queue.execute_kernel(kernel, [a_row], None)
         self.queue.read_buffer(buffer_current, current)
         self.queue.read_buffer(buffer_result, result_idx)
 
-        result_idx = np.resize(result_idx, (current[0], a_col))
-        return result_idx, a_valsPic
+
+        """
+        count = 0
+        for x in range(a_row):
+            isOk = True
+            i = 0
+            while isOk and i < len(matches):
+                if a_idx[x][matches[i][0]] != a_idx[x][matches[i][1]]:
+                    isOk = False
+                else:
+                    i += 1
+
+            if not isOk:
+                continue
+
+            curr = count
+            count += 1
+
+            for i in range(varsPic_row):
+                if a_varsPic[i] is not -1:
+                    result_idx[curr][a_varsPic[i]] = a_idx[x][a_varsPic[i]]
+
+
+        #result_idx = np.resize(result_idx, (current[0], a_col))
+        result_idx = np.resize(result_idx, (count, varsPic_size))
+        return result_idx, a_varsPic
 
     def Projection (self, data:np.ndarray, projectionLst:list) -> np.ndarray:
         data_row, data_col = np.shape(data)

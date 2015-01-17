@@ -201,9 +201,9 @@ def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
 
     result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
     result.append((
-        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), np.array({2},dtype=np.int)".format(num,
+        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), np.array({2},dtype=np.int))".format(num,
             predicat, matches), addon))
-    result.append(("size=np.shape(start_block_{0})[0]".format(num), addon))
+    result.append(("size=np.shape(start_block_{0}[0])[0]".format(num), addon))
     result.append(("if size is 0:", addon))
     result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
 
@@ -226,7 +226,7 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
 
     if len(lst) is 1:
         result.append((out_name + "_0_0 = " + in_name + "_0", addon))
-        return result, [(0, 0)]
+        return result, (0, 0)
 
     while len(lst) > 0:
         a = lst.pop(0)
@@ -235,7 +235,7 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
 
             command = "{0}_{1}_{2}=gpu.Join({3}_{4},{3}_{5})".format(out_name, interval, count, in_name, a, b)
             result.append((command, addon))
-            command = "size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count)
+            command = "size=np.shape({0}_{1}_{2}[0])[0]".format(out_name, interval, count)
             result.append((command, addon))
 
             result.append(("if size is 0:", addon))
@@ -256,11 +256,11 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
             if len(joinLst) > 0:
                 b = joinLst.pop(0)
 
-                command = "{0}_{1}_{2}=gpu.Join({0}_{3}_{4},{0},{5},{6})".format(out_name, interval, count, a[0], a[1],
+                command = "{0}_{1}_{2}=gpu.Join({0}_{3}_{4},{0}_{5}_{6})".format(out_name, interval, count, a[0], a[1],
                     b[0], b[1])
                 result.append((command, addon))
 
-                result.append(("size=np.shape({0}_{1}_{2})[0]".format(out_name, interval, count), addon))
+                result.append(("size=np.shape({0}_{1}_{2}[0])[0]".format(out_name, interval, count), addon))
                 result.append(("if size is 0:", addon))
                 result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
 
@@ -272,11 +272,9 @@ def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str =
 
         joinLst = temp
 
-    result.append(("final_{0}={0}_{1}_{2}".format(out_name, joinLst[0][0], joinLst[0][1]), addon))
-
     return result, joinLst[0]
 
-def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_name:str = "join",
+def QueryTree_Create_SelectAbove (lst:list, rule, finalJoin:tuple, dictName:str = "MainDict", in_name:str = "join",
                                   addon:int = 0) -> list:
     """
     creating python code based on the SELECT ABOVE in the "Definition Zone" paradigm.
@@ -292,11 +290,11 @@ def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_
     count = 0
 
     for ptr in lst:
-        command = "select_{0}=gpu.SelectAbove_Full(final_{1},{2},dict_{3},{4})".format(count, in_name,
-            rule.Body[ptr].VirtualVarsPic, dictName, rule.Body[ptr].Notation)
+        command = "select_{0}=gpu.SelectAbove_Full({1}_{2}_{3},{4},dict_{5},{6})".format(count, in_name, finalJoin[0],
+            finalJoin[1], rule.Body[ptr].VirtualVarsPic, rule.Body[ptr].Predicat, rule.Body[ptr].Notation)
 
         result.append((command, addon))
-        result.append(("size=np.shape(select_{0})".format(count), addon))
+        result.append(("size=np.shape(select_{0})[0]".format(count), addon))
         result.append(("if size[0] is 0:", addon))
         result.append(("return select_{0}".format(count), addon + 1))
 
@@ -304,7 +302,9 @@ def QueryTree_Create_SelectAbove (lst:list, rule, dictName:str = "MainDict", in_
     joinLst, target = tmp
     result = result + joinLst
 
-    result.append(("return gpu.Join(final_select_join, final_join)", addon))
+    result.append((
+        "return gpu.Join(select_join_{0}_{1}, join_{2}_{3})".format(target[0], target[1], finalJoin[0], finalJoin[1]),
+        addon))
 
     return result
 
@@ -470,12 +470,13 @@ class GAP_Rule:
             if block.Type is BlockType.ABOVE:
                 aboveLst.append(i)
 
-        result += QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)[0]
+        joinCode, finalJoin = QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)
+        result += joinCode
 
         if len(aboveLst) > 0:
-            result += QueryTree_Create_SelectAbove(aboveLst, self, dictName, addon = addon + 1)
+            result += QueryTree_Create_SelectAbove(aboveLst, self, finalJoin, dictName, addon = addon + 1)
         else:
-            result.append(("def_zone = final_join", addon + 1))
+            result.append(("def_zone = join_{0}_{1}".format(finalJoin[0], finalJoin[1]), addon + 1))
 
         return result
 
@@ -604,7 +605,7 @@ class GAP_Compiler:
                 result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
             else:
                 result += rule.Create_DefinitionZone(idx = i, addon = addon)
-                result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
+                result += rule.Create_CompiledCode(len(rule.Dictionary), idx = i, addon = addon)
 
         return result
 

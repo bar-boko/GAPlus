@@ -6,6 +6,7 @@ __author__ = "Bar Bokovza"
 import numpy as np
 import Code.compiler as com
 import Code.dataHolder as holder
+import Code.opencl as cl
 #endregion
 
 dataHold = holder.GAP_Data()
@@ -14,6 +15,8 @@ comp = com.GAP_Compiler()
 prev, next = { }, { }
 intervals = 0
 MainDict = { }
+
+gpu = cl.GAP_OpenCL()
 
 addedLst, changedLst = [], [] ## for predicats
 toDefZone, toRun = [], []     ## for rules
@@ -52,7 +55,7 @@ def PreRun ():
         dictList += "dict_{0} = MainDict[\"{0}\"]\n".format(predicat)
         dictList += "array_{0} = dataHold.Generate_NDArray(\"{0}\")\n".format(predicat)
     for i in range(len(comp.Rules)):
-        comp.Rules[i].Arrange_Execution(0, 0)
+        comp.Rules[i].Arrange_Execution(i, 0)
         def_zones.append((None, None))
 
     exec(compile(dictList, "<string>", "exec"))

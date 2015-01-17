@@ -106,47 +106,31 @@ void SIMPLE_FILTER(__global const int* a, __global const float* a_vals, int a_co
     }
 }
 
-__kernel
-void FILTER(__global int* a_idx, const int a_idx_col, __global int* places, const int places_row,
-            __global int* lasts, const int lasts_row,
-            __global int* valsPic, const int valsPic_row, __global int* current, __global int* result_idx)
+int ToFilter(__global int* a, const int a_col, __global int* places, const int places_row, int x)
 {
-    int x = get_global_id(0);
-    
-    int i = 0, iLast = 0;
-    while(iLast < lasts_row) {
-        while(i-1 < lasts[iLast]) {
-            if(a_idx[x*a_idx_col + i] != a_idx[x*a_idx_col + i+1]) return;
-            i++;
-        }
-        i = iLast+1;
-        iLast++;
+    for(int i = 0; i < places_row; i++) {
+        if (a[x*a_col + places[2*i]] != a[x*a_col + places[2*i+1]])
+            return 0;
     }
-    
-    int curr = atomic_add(current, 1);
-    
-    for(i=0; i < valsPic_row; i++)
-        if(valsPic[i] != -1)
-            result_idx[curr*a_idx_col+i] = a_idx[x*a_idx_col+i];
+    return 1;
 }
 
 __kernel
-void FILTER2 (__global int* a, const int a_col, __global int* places, const int places_row,
-              __global int* valsPic, const int valsPic_row, __global int* current, __global int* result, int result_col){
-
-              int x = get_global_id(0);
-
-              int i;
-
-              for(i=0; i < places_row; i++)
-                if(a[x*a_col+places[2*i]] != a[x*a_col+places[2*i+1]]) return;
-
-              int curr = atomic_add(current, 1);
-
-              for(i=0; i < valsPic_row; i++)
-                if(valsPic[i] != -1)
-                    result[curr*result_col+valsPic[i]] = a[x*a_col+valsPic[i]];
-}
+void FILTER(__global int* a, const int a_col, __global int* places, const int places_row,
+            __global int* varsPic, const int varsPic_row, __global int* current, __global int* result, const int result_col) {
+                
+            int x = get_global_id(0), i, isOk = 1;
+            
+            if(ToFilter(a, a_col, places, places_row, x) == 1) {
+                int curr = atomic_add(current,1);
+                
+                for(i = 0; i < varsPic_row; i++) {
+                    if(varsPic[i] != -1) {
+                        result[curr*result_col + varsPic[i]] = a[x*a_col + varsPic[i]];
+                    }
+                }
+            }
+}        
 
 /// This function return all the rows from the table that have value >= minVal
 __kernel
@@ -178,7 +162,7 @@ __kernel
 void PROJECTION(__global const int* array, const int array_col, __global int* result, const int result_col,
                 __global const int* places) {
                 
-                int x = get_global_id(0), y = get_global_id(1)
+                int x = get_global_id(0), y = get_global_id(1);
                 result[x*result_col+y] = array[x*array_col + places[y]];
 }
 
