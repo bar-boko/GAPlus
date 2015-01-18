@@ -1,4 +1,5 @@
 import sys
+import time
 
 __author__ = "Bar Bokovza"
 
@@ -47,18 +48,13 @@ def Load_Rules (path:str):
 
 def PreRun ():
     global MainDict
-    dictList = ""
+
     MainDict = dataHold.data
-    predicats = comp.GetPredicats()
-    for predicat in predicats:
+    for predicat in comp.GetPredicats():
         next[predicat] = 1, 1
-        dictList += "dict_{0} = MainDict[\"{0}\"]\n".format(predicat)
-        dictList += "array_{0} = dataHold.Generate_NDArray(\"{0}\")\n".format(predicat)
     for i in range(len(comp.Rules)):
         comp.Rules[i].Arrange_Execution(i, 0)
-        def_zones.append((None, None))
-
-    exec(compile(dictList, "<string>", "exec"))
+        def_zones.append((np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)))
 
 def Interval ():
     global comp
@@ -77,6 +73,7 @@ def Interval ():
         elif changed > 0:
             changedLst.append(predicat)
 
+    # arranging predicats
     for i in range(len(comp.Rules)):
         rule = comp.Rules[i]
         for predicat in addedLst:
@@ -93,22 +90,20 @@ def Interval ():
         fix_point = True
         return
 
+    # Starting execution here
     if len(toDefZone) > 0:
         for i in toDefZone:
-            def_zone, varsPic = np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)
-            exec(comp.Rules[i].Code_DefinitionZone)
-            exec(compile("def_zone, varsPic = DefinitionZone_{0}()".format(i), "<string>", "exec"))
-            def_zones[i] = (def_zone, varsPic)
-
+            def_zones[i] = comp.Rules[i].Create_DefinitionZone(dataHold, gpu)
             toRun.append(i)
 
     for i in toRun:
-        added, changed = 0, 0
-        exec(comp.Rules.Code_Run)
-        exec(compile("added, changed = Rule_{0}()".format(i), "<string>", "exec"))
+        if np.shape((def_zones[i])[0])[0] > 0:
+            added, changed = 0, 0
+            exec(comp.Rules[i].Code_Run)
+            exec(compile("added, changed = Rule_{0}()".format(i), "<string>", "exec"))
 
-        next_add, next_change = next[comp.Rules[i].Header.Predicat]
-        next[comp.Rules[i].Header.Predicat] = next_add + added, next_change + changed
+            next_add, next_change = next[comp.Rules[i].Header.Predicat]
+            next[comp.Rules[i].Header.Predicat] = (next_add + added, next_change + changed)
 
 def Run ():
     if intervals is 0:
@@ -129,20 +124,10 @@ def Exit ():
 Load_Data("../External/Data/fb-net1.csv")
 Load_Rules("../External/Rules/Pi4k.gap")
 
-str_code = com._Create_CommandString(comp.Compile())
-
+time_begin = time.time()
 Run_FixPoint()
+time_end = time.time()
 
-#sys.stdout.write("GAP+:> ")
-#while True:
-#    sys.stdout.write("GAP+:>")
-#    command = sys.stdin.readline()
-#    try:
-#        exec(command)
-#    except Exception as e:
-#        print("## Exception :")
-#        print(str(e))
-#       print()
+print(str(time_end - time_begin))
 
-#endregion
 

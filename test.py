@@ -11,7 +11,6 @@ dataHold.Load("External/Data/fb-net3.csv")
 
 com = comp.GAP_Compiler()
 com.Load("External/Rules/Pi4i.gap")
-code = com.Compile()
 
 gpu = para.GAP_OpenCL()
 

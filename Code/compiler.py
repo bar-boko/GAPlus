@@ -176,147 +176,6 @@ def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
         result.append(("array_{0} = dataHold.Generate_NDArray(\"{0}\")".format(predicat), addon))
 
     return result
-
-def QueryTree_Create_RuleArgs (block, num:int, addon:int = 0) -> list:
-    """
-    create python code for block that does not need filter
-    :param block: GAP Block in GAP_Block form
-    :param num: index of the gap block
-    :param addon: how many tabs to end to the beginning of the code
-    :return: list of python commands
-    """
-    result = []
-    predicat, physic = block.Predicat, block.PhysicalVarsPic
-
-    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
-
-    result.append(("start_block_{0}=(array_{1},start_block_varsPic_{0})".format(num, predicat), addon))
-    result.append(("size=np.shape(start_block_{0}[0])[0]".format(num), addon))
-    result.append(("if size is 0:", addon))
-    result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
-
-    return result
-
-def QueryTree_Create_Filter (block, num:int, addon:int = 0) -> list:
-    """
-    create python code for block that needs to pass filtering
-    :param block: GAP Block in GAP_Block form
-    :param num: index of the gap block
-    :param addon: how many tabs to end to the beginning of the code
-    :return: list of python commands
-    """
-    result = []
-    predicat, physic, matches = block.Predicat, block.PhysicalVarsPic, block.Matches
-
-    result.append(("start_block_varsPic_{0}=np.array({1},dtype=np.int32)".format(num, physic.tolist()), addon))
-    result.append((
-        "start_block_{0}=gpu.Filter((array_{1},start_block_varsPic_{0}), {2})".format(num,
-            predicat, matches), addon))
-    result.append(("size=np.shape(start_block_{0}[0])[0]".format(num), addon))
-    result.append(("if size is 0:", addon))
-    result.append(("return np.zeros((0, 0), dtype=np.int32)", addon + 1))
-
-    return result
-
-def QueryTree_Create_Join (lst:list, in_name:str = "start_block", out_name:str = "join", addon:int = 0) -> list:
-    """
-    create python code for the join process in the "Definition Zone" paradigm.
-    :rtype : list
-    :param lst: list of indexes
-    :param in_name: name of the starting tables
-    :param out_name: name of the output tables
-    :param addon: how many tabs to add to the beginning of the code
-    :return: list of python commands
-    """
-    joinLst = []
-    result = []
-    interval = 0
-    count = 0
-
-    if len(lst) is 1:
-        result.append((out_name + "_0_0 = " + in_name + "_0", addon))
-        return result, (0, 0)
-
-    while len(lst) > 0:
-        a = lst.pop(0)
-        if len(lst) > 0:
-            b = lst.pop(0)
-
-            command = "{0}_{1}_{2}=gpu.Join({3}_{4},{3}_{5})".format(out_name, interval, count, in_name, a, b)
-            result.append((command, addon))
-            command = "size=np.shape({0}_{1}_{2}[0])[0]".format(out_name, interval, count)
-            result.append((command, addon))
-
-            result.append(("if size is 0:", addon))
-            result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
-            joinLst.append((interval, count))
-            count += 1
-        else:
-            result.append(("{0}_{1}_{2}={3}_{4}".format(out_name, interval, count, in_name, a), addon))
-            joinLst.append((interval, count))
-
-    while len(joinLst) is not 1:
-        temp = []
-        interval += 1
-        count = 0
-
-        while len(joinLst) > 0:
-            a = joinLst.pop(0)
-            if len(joinLst) > 0:
-                b = joinLst.pop(0)
-
-                command = "{0}_{1}_{2}=gpu.Join({0}_{3}_{4},{0}_{5}_{6})".format(out_name, interval, count, a[0], a[1],
-                    b[0], b[1])
-                result.append((command, addon))
-
-                result.append(("size=np.shape({0}_{1}_{2}[0])[0]".format(out_name, interval, count), addon))
-                result.append(("if size is 0:", addon))
-                result.append(("return {0}_{1}_{2}".format(out_name, interval, count), addon + 1))
-
-                temp.append((interval, count))
-                count += 1
-            else:
-                result.append(("{0}_{1}_{2}={0}_{3}_{4}".format(out_name, interval, count, a[0], a[1]), addon))
-                temp.append((interval, count))
-
-        joinLst = temp
-
-    return result, joinLst[0]
-
-def QueryTree_Create_SelectAbove (lst:list, rule, finalJoin:tuple, dictName:str = "MainDict", in_name:str = "join",
-                                  addon:int = 0) -> list:
-    """
-    creating python code based on the SELECT ABOVE in the "Definition Zone" paradigm.
-    :rtype: list
-    :param lst: list of indexes
-    :param rule: the rule that we check what needs select above
-    :param dictName: the dictionary that holds all the data structures
-    :param in_name: the input name of the tables
-    :param addon: how many tabs we need to add to the beginning of the table
-    :return: list of python commands
-    """
-    result = []
-    count = 0
-
-    for ptr in lst:
-        command = "select_{0}=gpu.SelectAbove_Full({1}_{2}_{3},{4},dict_{5},{6})".format(count, in_name, finalJoin[0],
-            finalJoin[1], rule.Body[ptr].VirtualVarsPic, rule.Body[ptr].Predicat, rule.Body[ptr].Notation)
-
-        result.append((command, addon))
-        result.append(("size=np.shape(select_{0})[0]".format(count), addon))
-        result.append(("if size[0] is 0:", addon))
-        result.append(("return select_{0}".format(count), addon + 1))
-
-    tmp = QueryTree_Create_Join(lst, "select", "select_join", addon = addon)
-    joinLst, target = tmp
-    result = result + joinLst
-
-    result.append((
-        "return gpu.Join(select_join_{0}_{1}, join_{2}_{3})".format(target[0], target[1], finalJoin[0], finalJoin[1]),
-        addon))
-
-    return result
-
 # endregion
 
 # region GAP Block
@@ -408,7 +267,7 @@ class GAP_Rule:
         self.Header = GAP_Block(headerBlock, self.Dictionary)
         self.Type = RuleType.HEADER
 
-        self.Code_DefinitionZone, self.Code_Run, self.Predicats_Dependent = [], [], []
+        self.Code_Run, self.Predicats_Dependent = [], []
 
         self.Predicats.append(headerBlock[0])
 
@@ -443,51 +302,6 @@ class GAP_Rule:
 
     def __repr__ (self):
         return self.__str__()
-
-    def Create_DefinitionZone_HeaderRule (self, idx:int = 0, addon:int = 0) -> list:
-        result = []
-
-        result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
-
-        if len(self.Header.Matches) is 0:
-            result += QueryTree_Create_RuleArgs(self.Header, 0, addon + 1)
-        else:
-            result += QueryTree_Create_Filter(self.Header, 0, addon + 1)
-
-        result.append(("return start_block_0", addon + 1))
-        return result
-
-    def Create_DefinitionZone_Compiled (self, dictName:str = "MainDict", idx:int = 0, addon:int = 0) -> list:
-        """
-        create python rule in the "Definition Zone" paradigm
-        :param dictName: the name of the dictionary that holds all the data structure
-        :return: list of python commands
-        """
-        result = []
-
-        aboveLst = []
-
-        result.append(("def DefinitionZone_" + str(idx) + "() -> tuple:", addon))
-        for i in range(len(self.Body)):
-            block = self.Body[i]
-
-            if len(block.Matches) is 0:
-                result += QueryTree_Create_RuleArgs(block, i, addon + 1)
-            else:
-                result += QueryTree_Create_Filter(block, i, addon + 1)
-
-            if block.Type is BlockType.ABOVE:
-                aboveLst.append(i)
-
-        joinCode, finalJoin = QueryTree_Create_Join(list(range(0, len(self.Body))), addon = addon + 1)
-        result += joinCode
-
-        if len(aboveLst) > 0:
-            result += QueryTree_Create_SelectAbove(aboveLst, self, finalJoin, dictName, addon = addon + 1)
-        else:
-            result.append(("def_zone = join_{0}_{1}".format(finalJoin[0], finalJoin[1]), addon + 1))
-
-        return result
 
     def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
@@ -611,8 +425,6 @@ class GAP_Rule:
             for i in aboveLst:
                 block = self.Body[i]
 
-                # self, a:tuple, virtual_places:list, data:dict, minValue:float
-
                 after = gpu.SelectAbove_Full(arrays[0], block.VirtualVarsPic, dataHolder.GetData(block.Predicat),
                     float(block.Notation))
 
@@ -659,41 +471,4 @@ class GAP_Compiler:
 
         return lst
 
-    def Compile (self, dictName:str = "MainDict", addon:int = 0) -> list:
-        result = []
-
-        result += QueryTree_Create_Dictionaries(self.GetPredicats(), addon)
-
-        for i in range(len(self.Rules)):
-            rule = self.Rules[i]
-
-            if rule.Type == RuleType.HEADER:
-                #result += rule.Create_DefinitionZone_HeaderRule(idx = i, addon = addon)
-                result += rule.Create_CompiledCode_HeaderRule(len(rule.Dictionary), idx = i, addon = addon)
-            else:
-                #result += rule.Create_DefinitionZone(idx = i, addon = addon)
-                result += rule.Create_CompiledCode(len(rule.Dictionary), idx = i, addon = addon)
-
-        return result
-
 #endregion
-
-''''
-compiler = GAP_Compiler()
-compiler.Load("External/Rules/Pi4m.gap")
-
-rule = compiler.Rules[0]
-
-result = rule.Create_DefinitionZone()
-
-for line in result:
-    text, tabsCount = line
-
-    command = ""
-    for i in range(tabsCount):
-        command += "\t"
-
-    command = command + text
-
-    print(command)
-'''''
