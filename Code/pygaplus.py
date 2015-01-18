@@ -86,7 +86,7 @@ def Interval ():
                 toRun.append(i)
                 break
 
-    if len(toDefZone) + len(toRun) is 0:
+    if len(toDefZone) + len(toRun) == 0:
         fix_point = True
         return
 
@@ -122,13 +122,19 @@ def Run_FixPoint ():
 def Exit ():
     sys.exit()
 
+time_begin = time.time()
 Load_Data("../External/Data/fb-net1.csv")
-Load_Rules("../External/Rules/Pi4k.gap")
+time_end = time.time()
+print("Data : {0}s".format(time_end - time_begin))
+
+time_begin = time.time()
+Load_Rules("../External/Rules/Pi4a.gap")
+time_end = time.time()
+print("Compile : {0}s".format(time_end - time_begin))
 
 time_begin = time.time()
 Run_FixPoint()
 time_end = time.time()
-
-print(str(time_end - time_begin))
+print("Runtime : {0}s".format(time_end - time_begin))
 
 

@@ -17,7 +17,6 @@ import numpy as np
 
 import Code.validation as valid
 from Code.dataHolder import GAP_Data
-from Code.opencl import GAP_OpenCL
 
 #endregion
 
@@ -342,7 +341,6 @@ class GAP_Rule:
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return added, changed", addon + 1))
-        stresult = _Create_CommandString(result)
         return result
 
     def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
@@ -370,7 +368,6 @@ class GAP_Rule:
 
         result.append(("return 0, changed", addon + 1))
 
-        stresult = _Create_CommandString(result)
         return result
 
     def Arrange_Execution (self, idx:int, addon:int = 0):
@@ -383,7 +380,7 @@ class GAP_Rule:
                 _Create_CommandString(self.Create_CompiledCode(len(self.Dictionary), idx = idx, addon = addon)),
                 "<string>", "exec")
 
-    def Create_DefinitionZone_Join (self, arrays:list, gpu:GAP_OpenCL):
+    def Create_DefinitionZone_Join (self, arrays:list, gpu):
         next = []
 
         while len(arrays) > 1:
@@ -396,7 +393,9 @@ class GAP_Rule:
 
                     res = gpu.Join(a, b)
                     if _IsEmpty(res[0]):
-                        return res
+                        arrays.clear()
+                        arrays.append(res)
+                        return arrays
 
                     next.append(res)
 
@@ -405,7 +404,7 @@ class GAP_Rule:
 
         return arrays
 
-    def Create_DefinitionZone (self, dataHolder:GAP_Data, gpu:GAP_OpenCL) -> tuple:
+    def Create_DefinitionZone (self, dataHolder:GAP_Data, gpu) -> tuple:
         lst = list(range(len(self.Body)))
 
         arrays = []
@@ -427,6 +426,9 @@ class GAP_Rule:
                 aboveLst.append(i)
 
         arrays = self.Create_DefinitionZone_Join(arrays, gpu)
+
+        if _IsEmpty(arrays[0][0]):
+            return arrays[0]
 
         if len(aboveLst) > 0:
             for i in aboveLst:
