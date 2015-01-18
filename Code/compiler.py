@@ -306,7 +306,8 @@ class GAP_Rule:
     def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple) -> tuple:".format(idx), addon))
+        result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("added, changed = 0,0", addon + 1))
 
         result.append(("for row in assigns:", addon + 1))
@@ -320,7 +321,8 @@ class GAP_Rule:
                 for idx in block.VirtualVarsPic:
                     tupleKey += "a_{0},".format(idx)
 
-                result.append(("{0}=dict_{1}[({2})]".format(block.Notation, block.Predicat, tupleKey), addon + 2))
+                result.append(
+                    ("{0}=MainDict[\"{1}\"][({2})]".format(block.Notation, block.Predicat, tupleKey), addon + 2))
 
         block = self.Header
         tupleKey = ""
@@ -328,16 +330,16 @@ class GAP_Rule:
             tupleKey += "a_{0},".format(idx)
 
         result.append((
-            "if ({0}) not in dict_{1}.keys() and {2} > 0:".format(tupleKey, block.Predicat,
+            "if ({0}) not in MainDict[\"{1}\"].keys() and {2} > 0:".format(tupleKey, block.Predicat,
                                                                       block.Notation), addon + 2))
         result.append(("added+=1", addon + 3))
-        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
+        result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append((
-            "elif {0} >= dict_{1}[({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps),
+            "elif {0} >= MainDict[\"{1}\"][({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps),
             addon + 2))
         result.append(("changed+=1", addon + 3))
-        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
+        result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return added, changed", addon + 1))
         return result
@@ -345,7 +347,8 @@ class GAP_Rule:
     def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(assigns:np.ndarray, varsPic:np.ndarray) -> tuple:".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple) -> tuple:".format(idx), addon))
+        result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("changed = 0", addon + 1))
 
         result.append(("for row in assigns:", addon + 1))
@@ -359,9 +362,10 @@ class GAP_Rule:
             tupleKey += "a_{0},".format(idx)
 
         result.append((
-            "if {0} >= dict_{1}[({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps), addon + 2))
+            "if {0} >= MainDict[\"{1}\"][({2})]+({3}):".format(block.Notation, block.Predicat, tupleKey, eps),
+            addon + 2))
         result.append(("changed+=1", addon + 3))
-        result.append(("dict_{0}[({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
+        result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return 0, changed", addon + 1))
         return result

@@ -100,7 +100,7 @@ def Interval ():
         if np.shape((def_zones[i])[0])[0] > 0:
             added, changed = 0, 0
             exec(comp.Rules[i].Code_Run)
-            exec(compile("added, changed = Rule_{0}()".format(i), "<string>", "exec"))
+            exec(compile("added, changed = Rule_{0}(def_zones[{0}])".format(i), "<string>", "exec"))
 
             next_add, next_change = next[comp.Rules[i].Header.Predicat]
             next[comp.Rules[i].Header.Predicat] = (next_add + added, next_change + changed)
