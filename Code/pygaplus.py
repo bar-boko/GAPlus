@@ -94,7 +94,8 @@ def Interval ():
     if len(toDefZone) > 0:
         for i in toDefZone:
             def_zones[i] = comp.Rules[i].Create_DefinitionZone(dataHold, gpu)
-            toRun.append(i)
+            if not com._IsEmpty(def_zones[i][0]):
+                toRun.append(i)
 
     for i in toRun:
         if np.shape((def_zones[i])[0])[0] > 0:

@@ -42,7 +42,7 @@ class RuleType(Enum):
 #region p_ Functions
 
 def _IsEmpty (array:np.ndarray) -> bool:
-    return np.shape(array)[0] is 0
+    return np.shape(array)[0] == 0
 
 def _Parse_Block (block) -> (str, list, str, BlockType):
     """
@@ -101,9 +101,9 @@ def _Create_VirtualVarsPic (arguments, dictionary) -> np.ndarray:
     for arg in arguments:
         virtual.append(dictionary[arg])
 
-    return np.array(virtual, dtype = np.int32)
+    return virtual
 
-def _Create_PhysicalVarsPic (virtual:np.ndarray, size:int) -> np.ndarray:
+def _Create_PhysicalVarsPic (virtual:list, size:int) -> np.ndarray:
     """
     transform virtual pic to physical pic
     :param virtual: the virtual variables picture
@@ -232,8 +232,8 @@ class GAP_Block:
         if len(self.Matches) is not len(other.Matches):
             return len(self.Matches) - len(other.Matches)
 
-        if np.shape(self.VirtualVarsPic) is not np.shape(other.VirtualVarsPic):
-            return np.shape(self.VirtualVarsPic)[0] - np.shape(other.VirtualVarsPic)[0]
+        if len(self.VirtualVarsPic) is not len(other.VirtualVarsPic):
+            return len(self.VirtualVarsPic) - len(other.VirtualVarsPic)
 
         return 0
 
@@ -342,6 +342,7 @@ class GAP_Rule:
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return added, changed", addon + 1))
+        stresult = _Create_CommandString(result)
         return result
 
     def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
@@ -368,6 +369,8 @@ class GAP_Rule:
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
         result.append(("return 0, changed", addon + 1))
+
+        stresult = _Create_CommandString(result)
         return result
 
     def Arrange_Execution (self, idx:int, addon:int = 0):
