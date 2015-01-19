@@ -1,5 +1,4 @@
 import sys
-import time
 
 __author__ = "Bar Bokovza"
 
@@ -57,6 +56,7 @@ def PreRun ():
         changeSet.append((0, 0))
         comp.Rules[i].Arrange_Execution(i, 0)
         def_zones.append((np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)))
+        exec(comp.Rules[i].Code_Run, globals())
 
 def Interval ():
     global comp
@@ -101,12 +101,11 @@ def Interval ():
 
     for i in toRun:
         if np.shape((def_zones[i])[0])[0] > 0:
-            added, changed = 0, 0
-            exec(comp.Rules[i].Code_Run)
-            exec(compile("Rule_{0}(def_zones[{0}], changeSet)".format(i), "<string>", "exec"))
 
+            exec(compile("Rule_{0}(def_zones[{0}], changeSet, {0})".format(i), "<string>", "exec"))
             next_add, next_change = next[comp.Rules[i].Header.Predicat]
             added, changed = changeSet[i]
+            print("Rule #{0} => Added : {1}, Changed : {2}".format(i, added, changed))
             next[comp.Rules[i].Header.Predicat] = (next_add + added, next_change + changed)
 
 def Run ():
@@ -125,21 +124,12 @@ def Run_FixPoint ():
 def Exit ():
     sys.exit()
 
-time_begin = time.time()
-Load_Data("../External/Data/fb-net1.csv")
-Load_Data("../External/Data/fb-net2.csv")
-Load_Data("../External/Data/fb-net3.csv")
-time_end = time.time()
-print("Data : {0}s".format(time_end - time_begin))
+while True:
+    command = sys.stdin.readline()
+    try:
 
-time_begin = time.time()
-Load_Rules("../External/Rules/Pi4a.gap")
-time_end = time.time()
-print("Compile : {0}s".format(time_end - time_begin))
-
-time_begin = time.time()
-Run_FixPoint()
-time_end = time.time()
-print("Runtime : {0}s".format(time_end - time_begin))
-
-
+        exec(command)
+    except Exception as e:
+        print("Exception : {0}".format(e))
+    finally:
+        print("> Done !")

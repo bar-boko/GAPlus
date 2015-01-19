@@ -15,7 +15,6 @@ from enum import Enum
 
 import numpy as np
 
-import Code.validation as valid
 from Code.dataHolder import GAP_Data
 
 #endregion
@@ -39,6 +38,14 @@ class RuleType(Enum):
 #endregion
 
 #region p_ Functions
+
+def _IsFloat (number) -> bool:
+    # noinspection PyBroadException
+    try:
+        float(number)
+    except Exception:
+        return False
+    return True
 
 def _IsEmpty (array:np.ndarray) -> bool:
     return np.shape(array)[0] == 0
@@ -192,7 +199,7 @@ class GAP_Block:
         self.Notation = self.Notation.replace("\r", "")
 
         self.Type = BlockType.ANNOTATION
-        if valid.IsFloat(self.Notation):
+        if _IsFloat(self.Notation):
             self.Type = BlockType.ABOVE
 
         self.VirtualVarsPic = _Create_VirtualVarsPic(arguments, dictionary)
@@ -279,8 +286,11 @@ class GAP_Rule:
                 self.Type = RuleType.COMPLEX
 
             self.Body.append(parsed_block)
+
             if block[0] not in self.Predicats:
                 self.Predicats.append(block[0])
+
+            if block[0] not in self.Predicats_Dependent:
                 self.Predicats_Dependent.append(block[0])
 
         self.Body.sort()
@@ -305,7 +315,7 @@ class GAP_Rule:
     def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(def_zone:tuple, lst:list):".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple, lst:list, index:int):".format(idx), addon))
         result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("added, changed = 0,0", addon + 1))
 
@@ -340,13 +350,14 @@ class GAP_Rule:
         result.append(("changed+=1", addon + 3))
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
-        result.append(("lst[{0}] = (added, changed)".format(idx), addon + 1))
+        result.append(("lst[index] = (added, changed)", addon + 1))
+        result.append(("return", addon + 1))
         return result
 
     def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(def_zone:tuple, lst:list):".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple, lst:list, index:int):".format(idx), addon))
         result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("changed = 0", addon + 1))
 
@@ -366,7 +377,8 @@ class GAP_Rule:
         result.append(("changed+=1", addon + 3))
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
-        result.append(("lst[{0}] = (0, changed)".format(idx), addon + 1))
+        result.append(("lst[index] = (added, changed)", addon + 1))
+        result.append(("return", addon + 1))
 
         return result
 
