@@ -391,7 +391,7 @@ class GAP_Rule:
                     a = arrays.pop(0)
                     b = arrays.pop(0)
 
-                    res = gpu.Join(a, b)
+                    res = gpu.SuperJoin(a, b)
                     if _IsEmpty(res[0]):
                         arrays.clear()
                         arrays.append(res)
@@ -427,15 +427,17 @@ class GAP_Rule:
 
         arrays = self.Create_DefinitionZone_Join(arrays, gpu)
 
-        if _IsEmpty(arrays[0][0]):
-            return arrays[0]
+        final_idx, final_varsPic = arrays[0]
+
+        if _IsEmpty(final_idx):
+            return final_idx, final_varsPic
 
         if len(aboveLst) > 0:
             for i in aboveLst:
                 block = self.Body[i]
 
-                after = gpu.SelectAbove_Full(arrays[0], block.VirtualVarsPic, dataHolder.GetData(block.Predicat),
-                    float(block.Notation))
+                after = gpu.SelectAbove_Full((final_idx, final_varsPic), block.VirtualVarsPic,
+                    dataHolder.GetData(block.Predicat), float(block.Notation))
 
                 if _IsEmpty(after[0]):
                     return after
@@ -443,8 +445,10 @@ class GAP_Rule:
                 arrays.append(after)
 
             arrays = self.Create_DefinitionZone_Join(arrays, gpu)
+            final_idx, final_varsPic = arrays[0]
+            final_idx, _vals = gpu.Distinct(final_idx)
 
-        return arrays[0]
+        return final_idx, final_varsPic
 
 #endregion
 

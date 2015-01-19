@@ -4,7 +4,8 @@ import numpy as np
 
 import Code.dataHolder as dat
 import Code.compiler as comp
-import Code.python_relations as relation
+#import Code.python_relations as relation
+import Code.opencl as defIter
 
 #import time
 
@@ -147,18 +148,19 @@ dataHold.Load("External/Data/fb-net3.csv")
 com = comp.GAP_Compiler()
 com.Load("External/Rules/Pi4a.gap")
 
-gpu = relation.GAP_PythonRelations()
+gpu = defIter.GAP_OpenCL()
 
 MainDict = dataHold.data
 
 def_zones = []
-idx = 5
-rule = com.Rules[5]
+idx = 0
+#rule = com.Rules[5]
 
-def_zones.append(rule.Create_DefinitionZone(dataHold, gpu))
-rule.Arrange_Execution(idx)
-print("Rule #{0} => {1}".format(idx, Check_Rule(rule, def_zones[-1])))
-idx += 1
+for rule in com.Rules:
+    def_zones.append(rule.Create_DefinitionZone(dataHold, gpu))
+    rule.Arrange_Execution(idx)
+    print("Rule #{0} => {1}".format(idx, Check_Rule(rule, def_zones[-1])))
+    idx += 1
 
 
 #add0, change0 = Rule_0(def_zones[0])

@@ -3,86 +3,57 @@
 #pragma OPENCL EXTENSION cl_khr_global_int32_extended_atomics : enable
 #pragma OPENCL EXTENSION cl_khr_local_int32_extended_atomics : enable
 
-/// This function make cartesian multiplication for 2 tables. DONE
 __kernel
-void CARTESIAN(__global const int* a, int a_col,
-               __global const int* b, int b_col,
-               __global int* target)
+void CARTESIAN(__global const int* a, int a_col, __global const int* a_varsPic,
+               __global const int* b, int b_col, __global const int* b_varsPic,
+               __global int* target, __global const int* join_varsPic)
 {
-    int x = get_global_id(0), y = get_global_id(1);
+    int x = get_global_id(0), y = get_global_id(1), z = get_global_id(2);
     int rowPosition = x * b_col + y, i;
-
-    for (i = 0; i < a_col; i++)
-        target[rowPosition * (a_col + b_col) + i] = a[x * a_col + i];
-    for (i = 0; i < b_col; i++)
-        target[rowPosition * (a_col + b_col) + a_col + i] = b[y * b_col + i];
-}
-
-/// private function
-void EXECUTE_JOIN(__global const int* a, int a_col, __global const int* a_valuesPic,
-    	         __global const int* b, int b_col, __global const int* b_valuesPic,
-                __global const int* join_valuesPic, __global int* current, const int maxVars, __global int* buffer, int x, int y)
-{
-    int curr = atomic_add(current, 1);
     
-    int i;
-    for(i = 0; i < maxVars; i++)
+    if (join_varsPic[z] != -1)
     {
-        int writeIdx = curr*(a_col+b_col-1) + join_valuesPic[i], idxX = x*a_col + a_valuesPic[i], idxY = y*b_col + b_valuesPic[i];
-        if(a_valuesPic[i] >= 0)
-            buffer[writeIdx] = a[idxX];
+        if(a_varsPic[z] != -1)
+            target[rowPosition * (a_col + b_col) + join_varsPic[z]] = a[x * a_col + a_varsPic[z]];
         else
-            buffer[writeIdx] = b[idxY];
+            target[rowPosition * (a_col + b_col) + join_varsPic[z]] = b[x * b_col + b_varsPic[z]];
     }
 }
 
-// This function do a simple join based on 1 variable
 __kernel
-void SIMPLE_JOIN(__global const int* a, int a_col, __global const int* a_valuesPic,
-    	         __global const int* b, int b_col, __global const int* b_valuesPic,
-                __global const int* join_valuesPic, __global int* current, const int maxVars, __global int* buffer,
-                int joinVar)
+void SUPER_JOIN(__global const int* a, const int a_col, __global const int* a_varsPic,
+          __global const int* b, const int b_col, __global const int* b_varsPic,
+          __global const int* joinLst, const int joinLst_length,
+          __global const int* join_varsPic, const int varsPic_size,
+          __global int* result, __global int* current)
 {
     int x = get_global_id(0), y = get_global_id(1);
-    int rightX = x*a_col + a_valuesPic[joinVar], rightY = y*b_col + b_valuesPic[joinVar];
-    
-    if(a[rightX] == b[rightY])
-        EXECUTE_JOIN(a, a_col, a_valuesPic, b, b_col, b_valuesPic, join_valuesPic, current, maxVars, buffer, x, y);
-    /*{
-    int curr = atomic_add(current, 1);
-    
-    int i;
-    for(i = 0; i < maxVars; i++)
-    {
-        int writeIdx = curr*(a_col+b_col-1) + join_valuesPic[i], idxX = x*a_col + a_valuesPic[i], idxY = y*b_col + b_valuesPic[i];
-        if(a_valuesPic[i] >= 0)
-            buffer[writeIdx] = a[idxX];
-        else
-            buffer[writeIdx] = b[idxY];
-    }
-    }*/
-
-}
-
-/// this function do join based on more than 1 variable.
-__kernel
-void COMPLEX_JOIN(__global const int* a, int a_col, __global const int* a_valuesPic,
-                __global const int* b, int b_col, __global const int* b_valuesPic,
-                __global const int* join_valuesPic, __global int* current, const int maxVars, __global int* buffer,
-                 __global const int* join_a, const int join_row)
-{
-    int x = get_global_id(0), y = get_global_id(1);
-    int join_val, rightX, rightY, i;
-    
-    for(i=0; i < join_row; i++)
-    {
-        join_val = join_a[i];
-        rightX = x*a_col + a_valuesPic[join_val], rightY = y*b_col + b_valuesPic[join_val];
-        if(rightX != rightY)
-            return;
+    int array_size = a_col + b_col - joinLst_length;
+        
+    int isOk = 1, i = 0;
+    for (i = 0;i < joinLst_length; i++) {
+        int join = joinLst[i];
+        if (a[x*a_col + a_varsPic[join]] != b[y*b_col+b_varsPic[join]])
+        {
+            isOk = 0;
+        }
     }
     
-    EXECUTE_JOIN(a, a_col, a_valuesPic, b, b_col, b_valuesPic, join_valuesPic, current, maxVars, buffer, x, y);
+    if (isOk == 1){
+        int curr  = atomic_add(current, 1), count = 0;
+        
+        for(i = 0; i < varsPic_size; i++){
+            if (join_varsPic[i] >= 0)
+            {
+                if(a_varsPic[i] >= 0)
+                    result[curr*array_size + join_varsPic[i]] = a[x*a_col + a_varsPic[i]];
+                else
+                    result[curr*array_size + join_varsPic[i]] = b[y*b_col + b_varsPic[i]];
+                count++;
+            }
+        }
+    }
+    
 }
 
 /// this function return all the rows from a table that have same value for 2 variables

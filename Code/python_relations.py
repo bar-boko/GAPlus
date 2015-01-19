@@ -127,9 +127,9 @@ class GAP_PythonRelations:
                         if join_valsPic[i] != -1:
 
                             if a_valsPic[i] != -1:
-                                result[current][join_valsPic[i]] = a_idx[x][a_valsPic[i]]
+                                result[curr][join_valsPic[i]] = a_idx[x][a_valsPic[i]]
                             else:
-                                result[current][join_valsPic[i]] = b_idx[x][b_valsPic[i]]
+                                result[curr][join_valsPic[i]] = b_idx[x][b_valsPic[i]]
 
         result = np.resize(result, (current, a_col + b_col - lst_row))
         return result, join_valsPic
@@ -144,8 +144,10 @@ class GAP_PythonRelations:
 
         for i in range(a_row):
             if a_values[i] >= minValue:
+                curr = current
+                current += 1
                 for j in range(a_col):
-                    result_idx[current][j] = a_idx[i][j]
+                    result_idx[curr][j] = a_idx[i][j]
 
         result_idx = np.resize(result_idx, (current, a_col))
 
@@ -196,19 +198,26 @@ class GAP_PythonRelations:
 
         return result
 
-    def Distinct (self, array:np.ndarray, dictionary:dict) -> (np.ndarray, np.ndarray):
+    def Distinct (self, array:np.ndarray, dictionary:dict = None) -> (np.ndarray, np.ndarray):
         dist = { }
 
         for item in array:
             tup = tuple(item)
-            if not tup in dist.keys() and tup in dictionary.keys():
-                dist[tup] = dictionary[tup]
+
+            if not tup in dist.keys():
+                if dictionary is not None and tup in dictionary.keys():
+                    dist[tup] = dictionary[tup]
+                else:
+                    dist[tup] = 1
 
         if len(dist) == 0:
             return np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.float)
 
         idx = np.array(list(dist.keys()), dtype = np.int32)
-        values = np.array(list(dist.values()), dtype = np.float)
+        if not dictionary == None:
+            values = np.array(list(dist.values()), dtype = np.float)
+        else:
+            values = None
 
         return idx, values
 
@@ -225,6 +234,7 @@ class GAP_PythonRelations:
 
     def SelectAbove_Full (self, a:tuple, virtual_places:list, data:dict, minValue:float, toJoin:bool = False) -> (
             np.ndarray, np.ndarray):
+
         a_array, a_valsPic = a
         physical_places, places_valsPic = Create_VarsPic_Virtual(a_valsPic, virtual_places), Create_VarsPic_Physical(
             virtual_places, np.shape(a_valsPic)[0])

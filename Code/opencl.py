@@ -89,46 +89,54 @@ class GAP_OpenCL:
         self.flag_write = cl.CL_MEM_COPY_HOST_PTR | cl.CL_MEM_WRITE_ONLY
         self.flag_both = cl.CL_MEM_COPY_HOST_PTR | cl.CL_MEM_READ_WRITE
 
-    def Cartesian (self, a:np.ndarray, b:np.ndarray) -> np.ndarray:
-        a_row, a_col = np.shape(a)
-        b_row, b_col = np.shape(b)
+    def Cartesian (self, a:tuple, b:tuple, join_varsPic:np.ndarray) -> tuple:
+        a_idx, a_varsPic = a
+        a_row, a_col = np.shape(a_idx)
 
-        if a_row == 0 or b_row == 0 or a_col == 0 or b_col == 0:
-            return Generate_Empty(np.int32)
+        b_idx, b_varsPic = b
+        b_row, b_col = np.shape(b_idx)
 
-        result = np.zeros((a_row * b_row, a_col + b_col), dtype = np.int32)
+        size = np.shape(a_varsPic)[0]
 
-        buffer_a = self.context.create_buffer(self.flag_read, a)
-        buffer_b = self.context.create_buffer(self.flag_read, b)
+        result = np.zeros((a_row * b_row, Length_VarsPic(join_varsPic)), dtype = np.int32)
+
+        buffer_a_idx = self.context.create_buffer(self.flag_read, a_idx)
+        buffer_b_idx = self.context.create_buffer(self.flag_read, b_idx)
+        buffer_a_varsPic = self.context.create_buffer(self.flag_read, a_varsPic)
+        buffer_b_varsPic = self.context.create_buffer(self.flag_read, b_varsPic)
+        buffer_join_varsPic = self.context.create_buffer(self.flag_read, join_varsPic)
         buffer_result = self.context.create_buffer(self.flag_write, result)
 
         kernel = self.program.get_kernel("CARTESIAN")
 
-        kernel.set_arg(0, buffer_a)
+        kernel.set_arg(0, buffer_a_idx)
         Set_Argument(kernel, 1, a_col, np.int32)
+        kernel.set_arg(1, buffer_a_varsPic)
 
-        kernel.set_arg(2, buffer_b)
+        kernel.set_arg(2, buffer_b_idx)
         Set_Argument(kernel, 3, b_col, np.int32)
+        kernel.set_arg(4, buffer_b_varsPic)
 
-        kernel.set_arg(4, buffer_result)
+        kernel.set_arg(5, buffer_result)
+        kernel.set_arg(6, buffer_join_varsPic)
 
-        self.queue.execute_kernel(kernel, (a_row, b_row), None)
+        self.queue.execute_kernel(kernel, (a_row, b_row, size), None)
         self.queue.read_buffer(buffer_result, result)
 
-        return result
+        return result, join_varsPic
 
     def Join (self, a:tuple, b:tuple) -> tuple:
-        a_idx, a_valsPic = a
-        b_idx, b_valsPic = b
+        a_idx, a_varsPic = a
+        b_idx, b_varsPic = b
 
         a_row, a_col = np.shape(a_idx)
         b_row, b_col = np.shape(b_idx)
 
-        join_valsPic, joinLst = Create_VarsPic_Join(a_valsPic, b_valsPic)
+        join_varsPic, joinLst = Create_VarsPic_Join(a_varsPic, b_varsPic)
         lst_row = np.shape(joinLst)[0]
 
         if len(joinLst) is 0:
-            return self.Cartesian(a_idx, b_idx), join_valsPic
+            return self.Cartesian(a, b, join_varsPic)
 
         result = np.zeros((a_row * b_row, a_col + b_col - lst_row), dtype = np.int32)
         current = np.zeros(1, dtype = np.int32)
@@ -137,9 +145,9 @@ class GAP_OpenCL:
         buffer_a = self.context.create_buffer(self.flag_read, a_idx)
         buffer_b = self.context.create_buffer(self.flag_read, b_idx)
 
-        buffer_a_pic = self.context.create_buffer(self.flag_read, a_valsPic)
-        buffer_b_pic = self.context.create_buffer(self.flag_read, b_valsPic)
-        buffer_join_pic = self.context.create_buffer(self.flag_read, join_valsPic)
+        buffer_a_pic = self.context.create_buffer(self.flag_read, a_varsPic)
+        buffer_b_pic = self.context.create_buffer(self.flag_read, b_varsPic)
+        buffer_join_pic = self.context.create_buffer(self.flag_read, join_varsPic)
 
         buffer_result = self.context.create_buffer(self.flag_write, result)
         buffer_current = self.context.create_buffer(self.flag_both, current)
@@ -162,7 +170,7 @@ class GAP_OpenCL:
         kernel.set_arg(5, buffer_b_pic)
 
         kernel.set_arg(6, buffer_join_pic)
-        Set_Argument(kernel, 8, np.shape(a_valsPic)[0], np.int32)
+        Set_Argument(kernel, 8, np.shape(a_varsPic)[0], np.int32)
         kernel.set_arg(7, buffer_current)
         kernel.set_arg(9, buffer_result)
 
@@ -171,7 +179,7 @@ class GAP_OpenCL:
         self.queue.read_buffer(buffer_current, current)
 
         result = np.resize(result, (current[0], a_col + b_col - lst_row))
-        return result, join_valsPic
+        return result, join_varsPic
 
     def SelectAbove (self, data:tuple, minValue:float) -> tuple:  # (idx, values)
         a_idx, a_values = data
@@ -295,19 +303,79 @@ class GAP_OpenCL:
 
         return result
 
-    def Distinct (self, array:np.ndarray, dictionary:dict) -> (np.ndarray, np.ndarray):
+    def SuperJoin (self, a:tuple, b:tuple) -> tuple:
+        a_idx, a_varsPic = a
+        b_idx, b_varsPic = b
+
+        a_row, a_col = np.shape(a_idx)
+        b_row, b_col = np.shape(b_idx)
+
+        join_varsPic, joinLst = Create_VarsPic_Join(a_varsPic, b_varsPic)
+
+        if len(joinLst) is 0:
+            return self.Cartesian(a, b, join_varsPic)
+
+        result = np.zeros((a_row * b_row, a_col + b_col - len(joinLst)), dtype = np.int32)
+        current = np.zeros(1, dtype = np.int32)
+
+        # BUFFERS
+        buffer_a = self.context.create_buffer(self.flag_read, a_idx)
+        buffer_b = self.context.create_buffer(self.flag_read, b_idx)
+
+        buffer_a_pic = self.context.create_buffer(self.flag_read, a_varsPic)
+        buffer_b_pic = self.context.create_buffer(self.flag_read, b_varsPic)
+        buffer_join_pic = self.context.create_buffer(self.flag_read, join_varsPic)
+
+        buffer_joinLst = self.context.create_buffer(self.flag_read, np.asarray(joinLst, dtype = np.int32))
+        buffer_result = self.context.create_buffer(self.flag_write, result)
+        buffer_current = self.context.create_buffer(self.flag_both, current)
+
+        kernel = self.program.get_kernel("SUPER_JOIN")
+
+        kernel.set_arg(0, buffer_a)
+        Set_Argument(kernel, 1, a_col, np.int32)
+        kernel.set_arg(2, buffer_a_pic)
+
+        kernel.set_arg(3, buffer_b)
+        Set_Argument(kernel, 4, b_col, np.int32)
+        kernel.set_arg(5, buffer_b_pic)
+
+        kernel.set_arg(6, buffer_joinLst)
+        Set_Argument(kernel, 7, len(joinLst), np.int32)
+
+        kernel.set_arg(8, buffer_join_pic)
+        Set_Argument(kernel, 9, np.shape(a_varsPic)[0], np.int32)
+
+        kernel.set_arg(10, buffer_result)
+        kernel.set_arg(11, buffer_current)
+
+        self.queue.execute_kernel(kernel, (a_row, b_row), None)
+        self.queue.read_buffer(buffer_result, result)
+        self.queue.read_buffer(buffer_current, current)
+
+        result = np.resize(result, (current[0], a_col + b_col - len(joinLst)))
+        return result, join_varsPic
+
+    def Distinct (self, array:np.ndarray, dictionary:dict = None) -> (np.ndarray, np.ndarray):
         dist = { }
 
         for item in array:
             tup = tuple(item)
+
             if not tup in dist.keys():
-                dist[tup] = dictionary[tup]
+                if dictionary is not None and tup in dictionary.keys():
+                    dist[tup] = dictionary[tup]
+                else:
+                    dist[tup] = 1
 
         if len(dist) == 0:
-            return None, None
+            return np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.float)
 
         idx = np.array(list(dist.keys()), dtype = np.int32)
-        values = np.array(list(dist.values()), dtype = np.float)
+        if not dictionary == None:
+            values = np.array(list(dist.values()), dtype = np.float)
+        else:
+            values = None
 
         return idx, values
 
