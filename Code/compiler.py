@@ -305,7 +305,7 @@ class GAP_Rule:
     def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(def_zone:tuple) -> tuple:".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple, lst:list):".format(idx), addon))
         result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("added, changed = 0,0", addon + 1))
 
@@ -340,13 +340,13 @@ class GAP_Rule:
         result.append(("changed+=1", addon + 3))
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
-        result.append(("return added, changed", addon + 1))
+        result.append(("lst[{0}] = (added, changed)".format(idx), addon + 1))
         return result
 
     def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
         result = []
 
-        result.append(("def Rule_{0}(def_zone:tuple) -> tuple:".format(idx), addon))
+        result.append(("def Rule_{0}(def_zone:tuple, lst:list):".format(idx), addon))
         result.append(("assigns, varsPic = def_zone", addon + 1))
         result.append(("changed = 0", addon + 1))
 
@@ -366,7 +366,7 @@ class GAP_Rule:
         result.append(("changed+=1", addon + 3))
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
-        result.append(("return 0, changed", addon + 1))
+        result.append(("lst[{0}] = (0, changed)".format(idx), addon + 1))
 
         return result
 

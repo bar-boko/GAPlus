@@ -22,6 +22,7 @@ gpu = cl.GAP_OpenCL("../External/OpenCL/Commands.cl")
 addedLst, changedLst = [], [] ## for predicats
 toDefZone, toRun = [], []     ## for rules
 fix_point = False
+changeSet = []
 
 def_zones = []
 
@@ -53,6 +54,7 @@ def PreRun ():
     for predicat in comp.GetPredicats():
         next[predicat] = 1, 1
     for i in range(len(comp.Rules)):
+        changeSet.append((0, 0))
         comp.Rules[i].Arrange_Execution(i, 0)
         def_zones.append((np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)))
 
@@ -101,9 +103,10 @@ def Interval ():
         if np.shape((def_zones[i])[0])[0] > 0:
             added, changed = 0, 0
             exec(comp.Rules[i].Code_Run)
-            exec(compile("added, changed = Rule_{0}(def_zones[{0}])".format(i), "<string>", "exec"))
+            exec(compile("Rule_{0}(def_zones[{0}], changeSet)".format(i), "<string>", "exec"))
 
             next_add, next_change = next[comp.Rules[i].Header.Predicat]
+            added, changed = changeSet[i]
             next[comp.Rules[i].Header.Predicat] = (next_add + added, next_change + changed)
 
 def Run ():
@@ -124,6 +127,8 @@ def Exit ():
 
 time_begin = time.time()
 Load_Data("../External/Data/fb-net1.csv")
+Load_Data("../External/Data/fb-net2.csv")
+Load_Data("../External/Data/fb-net3.csv")
 time_end = time.time()
 print("Data : {0}s".format(time_end - time_begin))
 

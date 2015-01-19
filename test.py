@@ -9,7 +9,7 @@ import Code.opencl as defIter
 
 #import time
 
-"""
+
 def Rule_0 (def_zone:tuple) -> tuple:
     assigns, varsPic = def_zone
     added, changed = 0, 0
@@ -113,7 +113,7 @@ def Rule_5 (def_zone:tuple) -> tuple:
             changed += 1
             MainDict["g2_member"][(a_0,)] = b * c * d
     return added, changed
-"""
+
 
 def Check_Rule (rule:comp.GAP_Rule, def_zone:tuple) -> list:
     assigns, varsPic = def_zone
@@ -162,14 +162,13 @@ for rule in com.Rules:
     print("Rule #{0} => {1}".format(idx, Check_Rule(rule, def_zones[-1])))
     idx += 1
 
-
-#add0, change0 = Rule_0(def_zones[0])
-#add1, change1 = Rule_1(def_zones[1])
+add0, change0 = Rule_0(def_zones[0])
+add1, change1 = Rule_1(def_zones[1])
 #res = Rule_2_Check(def_zones[2])
-#add2, change2 = Rule_2(def_zones[2])
-#add3, change3 = Rule_3(def_zones[3])
-#add4, change4 = Rule_4(def_zones[4])
-#add5, change5 = Rule_5(def_zones[5])
+add2, change2 = Rule_2(def_zones[2])
+add3, change3 = Rule_3(def_zones[3])
+add4, change4 = Rule_4(def_zones[4])
+add5, change5 = Rule_5(def_zones[5])
 
 exit()
 
