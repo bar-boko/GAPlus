@@ -16,7 +16,7 @@ void CARTESIAN(__global const int* a, int a_col, __global const int* a_varsPic,
         if(a_varsPic[z] != -1)
             target[rowPosition * (a_col + b_col) + join_varsPic[z]] = a[x * a_col + a_varsPic[z]];
         else
-            target[rowPosition * (a_col + b_col) + join_varsPic[z]] = b[x * b_col + b_varsPic[z]];
+            target[rowPosition * (a_col + b_col) + join_varsPic[z]] = b[y * b_col + b_varsPic[z]];
     }
 }
 
@@ -49,7 +49,6 @@ void SUPER_JOIN(__global const int* a, const int a_col, __global const int* a_va
                     result[curr*array_size + join_varsPic[i]] = a[x*a_col + a_varsPic[i]];
                 else
                     result[curr*array_size + join_varsPic[i]] = b[y*b_col + b_varsPic[i]];
-                count++;
             }
         }
     }

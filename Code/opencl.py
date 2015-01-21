@@ -276,8 +276,8 @@ class GAP_OpenCL:
                 if a_varsPic[i] is not -1:
                     result_idx[curr][a_varsPic[i]] = a_idx[x][a_varsPic[i]]
 
-        result_idx = np.resize(result_idx, (current[0], a_col))
-        #result_idx = np.resize(result_idx, (count, varsPic_size))
+        #result_idx = np.resize(result_idx, (current[0], a_col))
+        result_idx = np.resize(result_idx, (count, varsPic_size))
         return result_idx, a_varsPic
 
     def Projection (self, data:np.ndarray, projectionLst:list) -> np.ndarray:
@@ -407,7 +407,7 @@ class GAP_OpenCL:
         select_idx = self.SelectAbove(distinct_array, minValue)
 
         if toJoin:
-            return self.Join(a, (select_idx, places_valsPic))
+            return self.SuperJoin(a, (select_idx, places_valsPic))
         return select_idx, places_valsPic
 
 #endregion

@@ -5,6 +5,7 @@ __author__ = "Bar Bokovza"
 # region IMPORTS
 import numpy as np
 import Code.opencl as pl
+from collections import defaultdict
 # endregion
 
 #region Private Functions
@@ -13,7 +14,7 @@ import Code.opencl as pl
 #region GAP Data Holder
 class GAP_Data:
     def __init__ (self):
-        self.data = { }
+        self.data = defaultdict()
 
     def Load (self, path:str):
         filer = open(path, "r")

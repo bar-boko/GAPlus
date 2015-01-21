@@ -496,4 +496,13 @@ class GAP_Compiler:
 
         return lst
 
+    def PreRun (self):
+        count = 0
+        for rule in self.Rules:
+            rule.Arrange_Execution(count)
+            count += 1
+
+    def Reset (self):
+        self.Rules = []
+
 #endregion
