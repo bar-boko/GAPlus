@@ -5,13 +5,35 @@ import numpy as np
 #endregion
 
 #region Private Functions
-def Generate_Empty (dtype) -> np.ndarray:
+def Generate_Empty (dtype):
+    """
+    "Create empty numpy array
+    :param dtype: the dtype of the array
+    :return: empty array
+    """
     return np.zeros(0, dtype = dtype)
 
-def Set_Argument (kernel, idx:int, value, dataType = np.int32):
+def Set_Argument (kernel, idx, value, dataType = np.int32):
+    """
+    Set an primitive type variable as an argument to a kernel
+    :param kernel: The kernel to set the argument on
+    :param idx: The index of the argument. (index of first argument in the kernel = 0)
+    :param value: the value of the variable
+    :param dataType: the type of the variable
+    :rtype: void
+    """
     kernel.set_arg(idx, np.array([value], dtype = dataType))
 
-def Create_VarsPic_Join (a:np.ndarray, b:np.ndarray) -> np.ndarray:
+def Create_VarsPic_Join (a, b):
+    """
+    Create a joined physical Variable Picture based on 2 Physical Variable Pictures.
+    :param a: The physical Variable Picture of the first array
+    :type a: np.ndarray
+    :param b: The physical Variable Picture of the second array
+    :type b: np.ndarray
+    :return: Joined Physical Variable Picture
+    :rtype: np.ndarray
+    """
     a_row, b_row = np.shape(a)[0], np.shape(b)[0]
 
     if a_row != b_row:
@@ -36,7 +58,14 @@ def Create_VarsPic_Join (a:np.ndarray, b:np.ndarray) -> np.ndarray:
 
     return result, np.array(joinLst, dtype = np.int32)
 
-def Length_VarsPic (varsPic:np.ndarray) -> int:
+def Length_VarsPic (varsPic):
+    """
+    Evaluate how many variables are in the array, based on the Physical Variables Picture.
+    :param varsPic: Physical Variables Picture of an array.
+    :type varsPic: np.ndarray
+    :return: amount of variables avaliable based on the Physical Variables Picture.
+    :rtype: int
+    """
     size = 0
 
     for item in varsPic:
@@ -45,7 +74,16 @@ def Length_VarsPic (varsPic:np.ndarray) -> int:
 
     return size
 
-def Create_VarsPic_Virtual (varsPic:np.ndarray, places:list) -> np.ndarray:
+def Create_VarsPic_Places (varsPic, places):
+    """
+    Create a list of pysical places based on list "places" and the Physical Variables Picture of an array.
+    :param varsPic: A Physical Variables Picture of an array
+    :type: varsPic: np.ndarray
+    :param places: List of numbers of variables
+    :type: list
+    :return: List of Physical places in the array.
+    :rtype: list
+    """
     result = []
 
     for place in places:
@@ -53,7 +91,16 @@ def Create_VarsPic_Virtual (varsPic:np.ndarray, places:list) -> np.ndarray:
 
     return result
 
-def Create_VarsPic_Physical (lst:list, size:int) -> np.ndarray:
+def Create_VarsPic_Physical (lst, size):
+    """
+    Create Physical Variables Picture from a Virtual Variables Picture
+    :param lst: A Virtual Variables Picture
+    :type lst: list
+    :param size: An amount of variables in the rule
+    :type size: int
+    :return: A Physical Variables Picture
+    :rtype: np.ndarray
+    """
     result = np.zeros(size, dtype = np.int32)
     result.fill(-1)
 
@@ -70,7 +117,22 @@ def Create_VarsPic_Physical (lst:list, size:int) -> np.ndarray:
 
 #region GAP OpenCL
 class GAP_Basic:
-    def Cartesian (self, a:tuple, b:tuple, join_varsPic:np.ndarray) -> tuple:
+    """
+    Implementation of the rational functions in Python
+    """
+
+    def Cartesian (self, a, b, join_varsPic):
+        """
+        Implement Cartesian Multiplication between relations
+        :param a: (Array, Physical Variables Pictures of the array)
+        :type a:tuple
+        :type b:tuple
+        :param b: (Array, Physical Variables Pictures of the array)
+        :param join_varsPic: Physical Variables Pictures of the demanded array
+        :type join_varsPic: np.ndarray
+        :return: (Array, join_varsPic)
+        :rtype: tuple
+        """
         a_idx, a_varsPic = a
         a_row, a_col = np.shape(a_idx)
 
@@ -93,7 +155,16 @@ class GAP_Basic:
 
         return result, join_varsPic
 
-    def SelectAbove (self, data:tuple, minValue:float) -> tuple:  # (idx, values)
+    def SelectAbove (self, data, minValue):
+        """
+        Implement Projection[Indexes] { Selection [Value >= minValue] {indexes, values}}
+        :param data: (Indexes Array, Values Array)
+        :type data: tuple
+        :param minValue: the minimum value of items that we demanded
+        :type minValue: float
+        :return: Indexes Array
+        :rtype: np.ndarray
+        """
         a_idx, a_values = data
         a_row, a_col = np.shape(a_idx)
 
@@ -112,7 +183,16 @@ class GAP_Basic:
 
         return result_idx
 
-    def Filter (self, a:tuple, matches:list) -> np.ndarray:
+    def Filter (self, a, matches):
+        """
+        Implement Selection [List of (Field1 = Field2) connected with AND] {array}
+        :param a: (Array, Physical Variables Picture)
+        :type a:tuple
+        :param matches: list of matches
+        :type matches: list
+        :return: (Array, Physical Variables Picture)
+        :rtype: tuple
+        """
         a_idx, a_varsPic = a
         a_row, a_col = np.shape(a_idx)
         varsPic_row = np.shape(a_varsPic)[0]
@@ -143,7 +223,15 @@ class GAP_Basic:
         result_idx = np.resize(result_idx, (count, varsPic_size))
         return result_idx, a_varsPic
 
-    def Projection (self, data:np.ndarray, projectionLst:list) -> np.ndarray:
+    def Projection (self, data, projectionLst):
+        """
+        Implement Projection [list]
+        :param data: (Array)
+        :type data: np.ndarray
+        :param projectionLst: List of demanded fields
+        :type projectionLst:list
+        :return: Array of projected Array (+duplicates)
+        """
         data_row, data_col = np.shape(data)
 
         result = np.zeros((data_row, len(projectionLst)), dtype = np.int32)
@@ -154,7 +242,16 @@ class GAP_Basic:
 
         return result
 
-    def SuperJoin (self, a:tuple, b:tuple) -> tuple:
+    def SuperJoin (self, a, b):
+        """
+        Implement Join between two tables.
+        :param a: (Array, Physical Variables Picture)
+        :type a: tuple
+        :param b: (Array, Physical Variables Picture)
+        :type b: tuple
+        :return: (Joined Array, Joined Physical Variables Picture)
+        :rtype: tuple
+        """
         a_idx, a_varsPic = a
         b_idx, b_varsPic = b
 
@@ -194,7 +291,17 @@ class GAP_Basic:
         result = np.resize(result, (current, a_col + b_col - len(joinLst)))
         return result, join_varsPic
 
-    def Distinct (self, array:np.ndarray, dictionary:dict = None) -> (np.ndarray, np.ndarray):
+    def Distinct (self, array, dictionary = None):
+        """
+        Implement Distinct on an array
+        :param array: An array
+        :type array: np.ndarray
+        :param dictionary: [Optional] if dictionary exist, the function will return also the values for the distinct
+         entries
+        :type dictionary: dict
+        :return: (Indexes Array, Values Array)
+        :rtype: tuple
+        """
         dist = { }
 
         for item in array:
@@ -217,10 +324,18 @@ class GAP_Basic:
 
         return idx, values
 
-    def SelectAbove_Full (self, a:tuple, virtual_places:list, data:dict, minValue:float, toJoin:bool = False) -> (
-            np.ndarray, np.ndarray):
+    def SelectAbove_Full (self, a, virtual_places, data, minValue, toJoin = False):
+        """
+        Execution the Full process of Select Above - Preparation for Select Above + Select Above
+        :param a: (Array, Physical Variables Picture)
+        :param virtual_places:
+        :param data: The Dictionary to get the data from.
+        :param minValue: The minimum value
+        :param toJoin: [Optional] if to join to the original array [default = FALSE]
+        :return:
+        """
         a_array, a_valsPic = a
-        physical_places, places_valsPic = Create_VarsPic_Virtual(a_valsPic, virtual_places), Create_VarsPic_Physical(
+        physical_places, places_valsPic = Create_VarsPic_Places(a_valsPic, virtual_places), Create_VarsPic_Physical(
             virtual_places, np.shape(a_valsPic)[0])
 
         projection_array = self.Projection(a_array, physical_places)

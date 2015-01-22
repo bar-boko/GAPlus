@@ -11,8 +11,6 @@ __author__ = "Bar Bokovza"
 # noinspection PyPep8
 
 #region IMPORTS
-from enum import Enum
-
 import numpy as np
 
 from Code.dataHolder import GAP_Data
@@ -20,13 +18,13 @@ from Code.dataHolder import GAP_Data
 #endregion
 
 #region ENUMS
-class BlockType(Enum):
+class BlockType(object):
     """ Presents the type of block from shape atom(args):notation """
     UNKNOWN = 0
     ANNOTATION = 1
     ABOVE = 2
 
-class RuleType(Enum):
+class RuleType(object):
     """
     presents the type of GAP rule
     """
@@ -39,7 +37,7 @@ class RuleType(Enum):
 
 #region p_ Functions
 
-def _IsFloat (number) -> bool:
+def _IsFloat (number):
     # noinspection PyBroadException
     try:
         float(number)
@@ -47,15 +45,22 @@ def _IsFloat (number) -> bool:
         return False
     return True
 
-def _IsEmpty (array:np.ndarray) -> bool:
+def _IsEmpty (array):
+    """
+    Return true if the array is empty
+    :param array: an array
+    :return: True / False
+    :rtype: bool
+    """
     return np.shape(array)[0] == 0
 
-def _Parse_Block (block) -> (str, list, str, BlockType):
+def _Parse_Block (block):
     """
     Gets a block in a GAP Rule and return a tuple of (atom, args, notation, blockType)
-    :param block:
-    :return: tuple => (atom:str, args:list, notation:str, blockType:BlockType)
-    :raise ValueError:
+    :param block: block in a GAP rule
+    :return: (atom:str, args:list, notation:str, blockType:BlockType)
+    :rtype: tuple
+    :raise ValueError: The predicat [predicat] does not have an atom and arguments
     """
     predicat, notation = block.split(":")
 
@@ -67,12 +72,13 @@ def _Parse_Block (block) -> (str, list, str, BlockType):
 
     return atom, args, notation
 
-# noinspection PyPep8Naming
-def _Parse_Rule (rule:str) -> (tuple, list, list):  # (headerBlock, body_lst)
+def _Parse_Rule (rule):
     """
     gets a string of rule, and return a tuple with header, body and a list of args that are avaliable in the rule
     :param rule: GAP Rule in string
+    :type rule: str
     :return: simplified header, simplified items in body, and list of arguments that are in the rule.
+    :rtype: tuple
     """
     args = []
 
@@ -95,7 +101,7 @@ def _Parse_Rule (rule:str) -> (tuple, list, list):  # (headerBlock, body_lst)
 
     return headerBlock, body_lst, args
 
-def _Create_VirtualVarsPic (arguments, dictionary) -> np.ndarray:
+def _Create_VirtualVarsPic (arguments, dictionary):
     """
     transform arg variables from names to numbers
     :param arguments: list of arguments of a block
@@ -109,7 +115,7 @@ def _Create_VirtualVarsPic (arguments, dictionary) -> np.ndarray:
 
     return virtual
 
-def _Create_PhysicalVarsPic (virtual:list, size:int) -> np.ndarray:
+def _Create_PhysicalVarsPic (virtual, size):
     """
     transform virtual pic to physical pic
     :param virtual: the virtual variables picture
@@ -135,6 +141,7 @@ def _Create_ArgumentsDictionary (lst):
     """
     create dictionary of arguments variables based on the list of args that we get from parameter
     :param lst: list of arguments variables in names
+    :type lst:list
     :return: dictionary of that list
     """
     result = { }
@@ -148,7 +155,14 @@ def _Create_ArgumentsDictionary (lst):
 
     return result
 
-def _Create_CommandString (lst:list) -> str:
+def _Create_CommandString (lst):
+    """
+    Create a string of a list code
+    :param lst: list code (build from tuples of (str, number)
+    :type lst: list
+    :return: string of a code with tabs
+    :rtype: str
+    """
     result = ""
 
     for line in lst:
@@ -165,15 +179,18 @@ def _Create_CommandString (lst:list) -> str:
 
 #endregion
 
-#region Query Tree
+#region Definition Zone Private Functions
 # The number presents the amount of tabs before
 
-def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
+def DefZone_Create_Dictionaries (lst, addon = 0):
     """
-    create python code for
+    create python code for the dictionaries
     :param lst: list of predicats in the rules
+    :type lst:list
     :param addon: how many tabs to add to the command
+    :type addon:int
     :return: python commands in list and amount of tabs needed
+    :rtype: list
     """
     result = []
 
@@ -182,6 +199,7 @@ def QueryTree_Create_Dictionaries (lst, addon:int = 0) -> list:
         result.append(("array_{0} = dataHold.Generate_NDArray(\"{0}\")".format(predicat), addon))
 
     return result
+
 # endregion
 
 # region GAP Block
@@ -191,7 +209,12 @@ class GAP_Block:
     it analyses GAP block and save all the needed data for it.
     """
 
-    def __init__ (self, parsed:tuple, dictionary:dict):
+    def __init__ (self, parsed, dictionary = None):
+        """
+        Initialization
+        :param parsed: basic tuple of a block
+        :param dictionary: the dictionary of the arguments variables in a rule.
+        """
         predicat, arguments, notation = parsed
         self.Predicat, self.Notation = predicat, notation
 
@@ -206,11 +229,10 @@ class GAP_Block:
         size = len(dictionary)
         self.PhysicalVarsPic, self.Matches = _Create_PhysicalVarsPic(self.VirtualVarsPic, size)
 
-    def Bool_NeedFilter (self) -> bool:
+    def Bool_NeedFilter (self):
         """
-
         return true if the arguments in the block needs to pass Filtering
-        :return: true or false
+        :return: boolean value
         :rtype: bool
         """
         return not len(self.Matches) is 0
@@ -232,8 +254,8 @@ class GAP_Block:
         :param other: the other object to compare to
         :return: how much the objects are different
         """
-        if self.Type.value is not other.Type.value:
-            return self.Type.value - other.Type.value
+        if self.Type is not other.Type:
+            return self.Type - other.Type
 
         if len(self.Matches) is not len(other.Matches):
             return len(self.Matches) - len(other.Matches)
@@ -266,7 +288,12 @@ class GAP_Rule:
     it analyses and save all the data needed for a single gap rule.
     """
 
-    def __init__ (self, rule:str):
+    def __init__ (self, rule):
+        """
+        Initialization
+        :param rule: GAP Rule in string
+        :type rule: str
+        """
         headerBlock, bodyBlock, args = _Parse_Rule(rule)
         self.Dictionary = _Create_ArgumentsDictionary(args)
         self.Body, self.Predicats = [], []
@@ -312,7 +339,20 @@ class GAP_Rule:
     def __repr__ (self):
         return self.__str__()
 
-    def Create_CompiledCode (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
+    def Create_CompiledCode (self, total, idx = 0, addon = 0, eps = 0.00001):
+        """
+        Compile for the code for the running (without "Definition Zone")
+        :param total: amount of arguments variables
+        :type total:int
+        :param idx: the index of the rule
+        :type idx:int
+        :param addon: how much tabs do add
+        :type addon: int
+        :param eps: the epsilon of the rule [default = 0.000001]
+        :type eps:float
+        :return: code list
+        :rtype: list
+        """
         result = []
 
         result.append(("def Rule_{0}(def_zone:tuple, lst:list, index:int):".format(idx), addon))
@@ -339,8 +379,8 @@ class GAP_Rule:
             tupleKey += "a_{0},".format(idx)
 
         result.append((
-            "if ({0}) not in MainDict[\"{1}\"].keys() and {2} > 0:".format(tupleKey, block.Predicat,
-                                                                      block.Notation), addon + 2))
+            "if ({0}) not in MainDict[\"{1}\"].keys() and {2} > 0:".format(tupleKey, block.Predicat, block.Notation),
+            addon + 2))
         result.append(("added+=1", addon + 3))
         result.append(("MainDict[\"{0}\"][({1})] = {2}".format(block.Predicat, tupleKey, block.Notation), addon + 3))
 
@@ -354,7 +394,20 @@ class GAP_Rule:
         result.append(("return", addon + 1))
         return result
 
-    def Create_CompiledCode_HeaderRule (self, total:int, idx:int = 0, addon:int = 0, eps:float = 0.00001) -> list:
+    def Create_CompiledCode_HeaderRule (self, total, idx = 0, addon = 0, eps = 0.00001):
+        """
+        Compile for the code for the running [Header rule] (without "Definition Zone")
+        :param total: amount of arguments variables
+        :type total:int
+        :param idx: the index of the rule
+        :type idx:int
+        :param addon: how much tabs do add
+        :type addon: int
+        :param eps: the epsilon of the rule [default = 0.000001]
+        :type eps:float
+        :return: code list
+        :rtype: list
+        """
         result = []
 
         result.append(("def Rule_{0}(def_zone:tuple, lst:list, index:int):".format(idx), addon))
@@ -382,17 +435,32 @@ class GAP_Rule:
 
         return result
 
-    def Arrange_Execution (self, idx:int, addon:int = 0):
+    def Arrange_Execution (self, idx, addon = 0):
+        """
+        Before execution, compile the rule
+        :param idx: the index of the rule
+        :type idx: int
+        :param addon: how much tabs to add to the code
+        :type addon: int
+        """
         if self.Type == RuleType.HEADER:
             self.Code_Run = compile(_Create_CommandString(
                 self.Create_CompiledCode_HeaderRule(len(self.Dictionary), idx = idx, addon = addon)), "<string>",
-                                    "exec")
+                "exec")
         else:
             self.Code_Run = compile(
                 _Create_CommandString(self.Create_CompiledCode(len(self.Dictionary), idx = idx, addon = addon)),
                 "<string>", "exec")
 
-    def Create_DefinitionZone_Join (self, arrays:list, gpu):
+    def Create_DefinitionZone_Join (self, arrays, gpu):
+        """
+        Executing the PART B in the Definition Zone algorithm : Join
+        :param arrays: The Arrays to join
+        :type arrays: list
+        :param gpu: the execution agent for the relational functions (OpenCL / Basic)
+        :return: list of arrays with only 1 array
+        :rtype: list
+        """
         next = []
 
         while len(arrays) > 1:
@@ -416,7 +484,13 @@ class GAP_Rule:
 
         return arrays
 
-    def Create_DefinitionZone (self, dataHolder:GAP_Data, gpu) -> tuple:
+    def Create_DefinitionZone (self, dataHolder, gpu):
+        """
+        Executing the fully algorithm of "Definition Zone"
+        :param dataHolder: the data agent
+        :type dataHolder: GAP_Data
+        :param gpu: The relational functions agent (OpenCL / Basic)
+        """
         lst = list(range(len(self.Body)))
 
         arrays = []
@@ -470,7 +544,12 @@ class GAP_Compiler:
     it loads a gap file (of more than 1) and compile the rules to python code
     """
 
-    def __init__ (self, eps:float = 0.00001):
+    def __init__ (self, eps = 0.00001):
+        """
+        Initialization
+        :param eps: epsilon of the gap rules
+        :type eps: float
+        """
         self.Rules = []
         self.e = eps
 
@@ -478,7 +557,7 @@ class GAP_Compiler:
         """
         load a single gap file into the compiler
         :param path: Gap file path
-        :return: void
+        :type path: str
         """
         filer = open(path, "r")
 
@@ -486,7 +565,12 @@ class GAP_Compiler:
             rule = GAP_Rule(line)
             self.Rules.append(rule)
 
-    def GetPredicats (self) -> list:
+    def GetPredicats (self):
+        """
+        Get the predicats avaliable of all the predicats in the all rules
+        :return: list of predicats
+        :rtype: list
+        """
         lst = []
 
         for rule in self.Rules:
@@ -497,12 +581,18 @@ class GAP_Compiler:
         return lst
 
     def PreRun (self):
+        """
+        Execute before Running the code on the engine
+        """
         count = 0
         for rule in self.Rules:
             rule.Arrange_Execution(count)
             count += 1
 
     def Reset (self):
-        self.Rules = []
+        """
+        Clean all rules from the compiler
+        """
+        self.Rules.clear()
 
-#endregion
+        #endregion

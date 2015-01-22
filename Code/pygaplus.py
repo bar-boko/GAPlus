@@ -1,55 +1,85 @@
-import sys
-import time
-
 __author__ = "Bar Bokovza"
 
 #region Imports
 import numpy as np
+
 import Code.compiler as com
 import Code.dataHolder as holder
-from Code.basic import GAP_Basic
-import gc
+
+#from Code.basic import GAP_Basic
+from Code.opencl import GAP_OpenCL
+import sys
+#import time
+#import gc
 #endregion
 
+#region Data
 dataHold = holder.GAP_Data()
 comp = com.GAP_Compiler()
 
-prev, next = { }, { }
+#prev, next = { }, { }
 intervals = 0
 MainDict = { }
 
-#gpu = cl.GAP_OpenCL("../External/OpenCL/Commands.cl")
-gpu = GAP_Basic()
+gpu = GAP_OpenCL("../External/OpenCL/Commands.cl")
+#gpu = GAP_Basic()
 
-addedLst, changedLst = [], [] ## for predicats
-toDefZone, toRun = [], []     ## for rules
+#addedLst, changedLst = [], [] ## for predicats
+#toDefZone, toRun = [], []     ## for rules
 fix_point = False
 add_fix_point = False
 changeSet = []
 
 def_zones = []
+#endregion
 
+#region Help Commands
 print("GAPlus - GAP Compiler using OpenCL - By Bar Bokovza")
 print("===================================================")
 print("Commands :")
+print("===================================================")
+print("Load_Data(path:string)   - Load data to the Data Holder")
+print("Load_Rules(path:string)  - Load the rules from file")
 print("---------------------------------------------------")
-print("Load_Data(path:string) - Load data to the Data Holder")
-print("Load_Rules(path:string) - Load the rules from file")
-print("Add(rule:str) - Add a rule to the compiler")
-print("Run() - Execute 1 times the GAP Rules.")
-print("Run_FixPoint() - Run until fix")
+print("Add(rule:str)            - Add a rule to the compiler")
 print("---------------------------------------------------")
-print("Exit() - Close the prompt.")
-print("<command> - Any accepted python 3.4.x command.")
+print("Run()                    - Execute 1 times the GAP Rules")
+print("Run_FixPoint()           - Run until fix")
 print("---------------------------------------------------")
+print("Export_Data(path:str)    - Export the data from the engine to a csv file")
+print("Export_Rules([path:str]) - Export the compiled code from the engine to a file")
+print("Export_Rules()           - Prints the compiled")
+print("---------------------------------------------------")
+print("Reset()                  - Reset all the console")
+print("Reset_Data()             - Reset only the data from the console")
+print("Reset_Rules()            - Reset only the GAP rules from the console")
+print("---------------------------------------------------")
+print("Exit()                   - Close the prompt.")
+print("---------------------------------------------------")
+print("<command>                - Any accepted python 2.7.x command.")
+print("===================================================")
+#endregion
 
 #region Functions
-def Load_Data (path:str):
+def Load_Data (path):
+    """
+    Loaded the csv file in the path to the data holder.
+    :type path: str
+    :param path: csv file path that contains the data
+    :rtype: void
+    """
     dataHold.Load(path)
 
-def Load_Rules (path:str):
+def Load_Rules (path):
+    """
+    Load the rules in the GAP file to the console.
+    :type path: str
+    :param path: GAP file
+    :rtype: void
+    """
     comp.Load(path)
 
+"""
 def PreRun ():
     global lstRules, lstRules_Ground
     global MainDict
@@ -63,8 +93,12 @@ def PreRun ():
         rule.Arrange_Execution(i, 0)
         def_zones.append((np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)))
         exec(rule.Code_Run, globals())
+"""
 
-def Basic_PreRun ():
+def PreRun ():
+    """
+    Preparing the console before running the code in the first time.
+    """
     global MainDict
 
     MainDict = dataHold.data
@@ -75,20 +109,24 @@ def Basic_PreRun ():
         def_zones.append((np.zeros(0, dtype = np.int32), np.zeros(0, dtype = np.int32)))
         exec(rule.Code_Run, globals())
 
-def Basic_Interval ():
+def Interval ():
+    """
+    Execute all the rules in the compiler once.
+    :return: void
+    """
     global comp
     global dataHolder
     global fix_point, add_fix_point
     global intervals
 
-    toDefZone.clear(), toRun.clear(), addedLst.clear(), changedLst.clear()
+    #toDefZone.clear(), toRun.clear(), addedLst.clear(), changedLst.clear()
 
     added, changed = 0, 0
 
     for i in range(len(comp.Rules)):
         rule = comp.Rules[i]
         if not add_fix_point:
-            def_zones[i] = comp.Rules[i].Create_DefinitionZone(dataHold, gpu)
+            def_zones[i] = rule.Create_DefinitionZone(dataHold, gpu)
         exec(compile("Rule_{0}(def_zones[{0}], changeSet, {0})".format(i), "<string>", "exec"))
         add, change = changeSet[i]
         #print("#{0} -> {1},{2}".format(i, added, changed))
@@ -104,6 +142,7 @@ def Basic_Interval ():
 
     intervals += 1
 
+"""
 def Interval ():
     global comp
     global dataHolder
@@ -160,53 +199,73 @@ def Interval ():
             next[comp.Rules[i].Header.Predicat] = (next_add + added, next_change + changed)
 
     intervals += 1
+"""
 
 def Run ():
+    """
+    Execute Single Interval
+    """
     if intervals is 0:
         PreRun()
 
     Interval()
 
 def Run_FixPoint ():
+    """
+    Run the GAP rules until reaching a fix point
+    """
     if intervals is 0:
         PreRun()
 
     while not fix_point:
         Interval()
 
-def Basic_Run_FixPoint ():
-    if intervals is 0:
-        Basic_PreRun()
-
-    while not fix_point:
-        Basic_Interval()
-
 def Reset ():
-    global MainDict, prev, next, addedLst, changedLst, toDefZone, toRun, fix_point, changeSet, def_zones
-    global prev, next, intervals, add_fix_point
+    """
+    Clean all the console from all the rules and data.
+    """
+    global MainDict, fix_point, changeSet, def_zones, intervals, add_fix_point
+    #global prev, next, addedLst, changedLst, toDefZone, toRun
 
-    dataHold.Reset()
-    comp.Reset()
-    MainDict.clear()
-    prev.clear()
-    next.clear()
+    Reset_Data()
+    Reset_Rules()
 
-    addedLst.clear()
-    changedLst.clear()
-    toDefZone.clear()
-    toRun.clear()
+    #prev.clear()
+    #next.clear()
+    #addedLst.clear()
+    #changedLst.clear()
+    #toDefZone.clear()
+    #toRun.clear()
 
     fix_point = False
     add_fix_point = False
-    changeSet.clear()
 
+def Reset_Data ():
+    """
+    Clear the data holder.
+    """
+    global intervals, def_zones, changeSet
+    dataHold.Reset()
+    MainDict.clear()
     def_zones.clear()
+    changeSet.clear()
+    intervals = 0
 
+def Reset_Rules ():
+    """
+    Clear the compiler from GAP Rules
+    """
+    global intervals
+    comp.Reset()
     intervals = 0
 
 def Exit ():
+    """
+    Exit the console.
+    """
     sys.exit()
 
+"""
 def Benchmark (dataPath:str = "../External/Data/fb-net1.csv", rulesPath:str = "../External/Rules/Pi4a.gap",
         max:int = 11):
     result = []
@@ -242,14 +301,15 @@ def Benchmark (dataPath:str = "../External/Data/fb-net1.csv", rulesPath:str = ".
 
     print("#> ENDED ! RESULTS ARE IN THE LOG.CSV FILE")
     Exit()
+"""
 
-Benchmark(max = 100)
+#Benchmark(max = 100)
 
-#while True:
-#    command = sys.stdin.readline()
-#    try:
-#        exec(command)
-#    except Exception as e:
-#        print("Exception : {0}".format(e))
-#    finally:
-#        print("> Done !")
+while True:
+    command = sys.stdin.readline()
+    try:
+        exec(command)
+    except Exception as e:
+        print("> Exception : {0}".format(e))
+    finally:
+        print("> Done !")

@@ -23,6 +23,7 @@
       <option name="ignoredIdentifiers">
         <list>
           <option value="validation" />
+          <option value="list.clear" />
         </list>
       </option>
     </inspection_tool>
